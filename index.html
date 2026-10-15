@@ -1,0 +1,1913 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ST→ME 프리셋 변환기</title>
+<link rel="stylesheet" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+:root {
+  --bg: #f5f4f1; --panel: #ffffff; --text: #1f1f1d; --muted: #6b6a66; --faint: #9a988f; --line: #e3e1db;
+  --accent: #2f6fd6; --accent-soft: #e6effc; --accent-text: #ffffff; --hover: #f2f0ec; --sel: #eaf1fd;
+  --warn: #9a6200; --warn-soft: #fff4dc; --ok: #2f7a4b; --chip: #eeece7; --code-bg: #f4f2ee; --danger: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151514; --panel: #1e1e1c; --text: #ecebe8; --muted: #a3a19b; --faint: #75736d; --line: #33322e;
+    --accent: #6ea2f2; --accent-soft: #1d2a40; --accent-text: #0c1424; --hover: #262522; --sel: #1d2a40;
+    --warn: #e8b85a; --warn-soft: #2f2715; --ok: #73c492; --chip: #2b2a27; --code-bg: #252422; --danger: #f08a82;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.5 "Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+button, input, select { font: inherit; color: inherit; }
+button { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 5px 11px; cursor: pointer; white-space: nowrap; }
+button:hover { background: var(--hover); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+button.ghost { border-color: transparent; background: transparent; color: var(--muted); padding: 3px 7px; }
+button.ghost:hover { background: var(--hover); color: var(--text); }
+button.icon { padding: 2px 7px; font-size: 13px; }
+input[type=text], select { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; width: 100%; min-width: 0; }
+input[type=text]:focus, select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.hidden { display: none !important; }
+
+/* top bar */
+.top { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+.top-inner { max-width: 1200px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 8px; align-items: center; }
+.brand { font-weight: 700; white-space: nowrap; margin-right: 6px; }
+.top input { flex: 1; }
+.tabs { max-width: 1200px; margin: 0 auto; padding: 0 16px; display: flex; gap: 18px; }
+.tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 6px 0 8px; color: var(--muted); }
+.tab:hover { background: none; color: var(--text); }
+.tab.on { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+.badge { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; font-size: 12px; background: var(--chip); color: var(--muted); text-align: center; }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+main { max-width: 1200px; margin: 0 auto; padding: 14px 16px 60px; }
+
+/* empty state */
+.drop { margin: 40px auto; max-width: 560px; border: 2px dashed var(--line); border-radius: 14px; padding: 48px 20px; text-align: center; background: var(--panel); cursor: pointer; }
+.drop.over { border-color: var(--accent); background: var(--sel); }
+.drop b { display: block; font-size: 17px; margin-bottom: 6px; }
+.drop span { color: var(--muted); }
+.err { color: var(--danger); margin-top: 10px; }
+
+/* toggle → variable */
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px; align-items: start; }
+.right { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.chip.blank { background: transparent; border: 1px dashed var(--line); color: var(--faint); }
+.sheet-head, .lfab, .backdrop, .only-narrow { display: none; }
+@media (max-width: 820px) {
+  .cols { grid-template-columns: minmax(0, 1fr); }
+  /* phones: the source toggle list is a bottom sheet opened from a floating button */
+  #listPane { display: none; }
+  body.list-open { overflow: hidden; }
+  body.list-open #listPane { display: flex; flex-direction: column; position: fixed; left: 0; right: 0; bottom: 0; height: 85vh; height: 85dvh; z-index: 20;
+    border-radius: 16px 16px 0 0; border-bottom: 0; box-shadow: 0 -6px 24px rgba(0, 0, 0, .18); }
+  body.list-open #listPane .list { flex: 1; max-height: none; min-height: 0; overscroll-behavior: contain; padding-bottom: env(safe-area-inset-bottom); }
+  body.list-open .backdrop { display: block; position: fixed; inset: 0; z-index: 19; background: rgba(0, 0, 0, .35); }
+  .sheet-head { display: flex; align-items: center; gap: 8px; padding: 14px 12px 8px; position: relative; border-bottom: 1px solid var(--line); }
+  .sheet-head::before { content: ""; position: absolute; top: 5px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--line); }
+  .sheet-head b { margin-right: auto; }
+  .lfab { display: block; position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 15; padding: 13px; border: 0;
+    border-radius: 12px; background: var(--accent); color: var(--accent-text); font-weight: 600; box-shadow: 0 4px 14px rgba(0, 0, 0, .2); }
+  .lfab:hover { background: var(--accent); }
+  body.list-open .lfab { display: none; }
+  .only-narrow { display: inline; }
+  .only-wide { display: none; }
+  main { padding: 12px 12px 90px; }
+  .top-inner { flex-wrap: wrap; padding: 8px 12px; }
+  .top-inner #presetName { order: 10; flex-basis: 100%; }
+  .top-inner #openBtn { margin-right: auto; }
+  .tabs { padding: 0 12px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+}
+.only-touch { display: none; }
+@media (hover: none) { .only-touch { display: inline; } .only-mouse { display: none; } }
+
+/* touch: bigger hit areas, 16px inputs so iOS doesn't zoom on focus */
+@media (pointer: coarse) {
+  input[type=text], select { font-size: 16px; }
+  .row { padding: 10px 12px; flex-wrap: wrap; row-gap: 4px; }
+  .row .nm { flex-basis: 55%; }
+  .row input[type=checkbox], .opt input[type=checkbox], .opt input[type=radio] { width: 20px; height: 20px; }
+  button.icon { min-width: 34px; min-height: 34px; }
+  .toolbar button.ghost { padding: 7px 10px; }
+  .seg button { padding: 8px 12px; }
+  .opt { flex-wrap: wrap; }
+  .opt input[type=text] { flex: 1 1 70px; }
+  .opt button.icon { min-width: 30px; padding: 2px 4px; }
+  .opt .src { display: none; }
+  .grp { padding: 10px 12px; }
+}
+.pane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.pane-head { padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.toolbar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.toolbar .count { margin-left: auto; color: var(--muted); font-size: 13px; }
+.search { display: flex; gap: 6px; }
+.search select { width: auto; }
+.list { max-height: calc(100vh - 230px); min-height: 200px; overflow: auto; user-select: none; }
+.grp { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--code-bg); font-size: 12px; color: var(--muted); font-weight: 600; cursor: pointer; border-bottom: 1px solid var(--line); position: sticky; top: 0; }
+.row { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.row:hover { background: var(--hover); }
+.row.sel { background: var(--sel); }
+.row.off { cursor: default; color: var(--faint); }
+.row.off:hover { background: none; }
+.row.gone .nm { text-decoration: line-through; color: var(--faint); }
+.row .rowdel { opacity: .3; }
+.row:hover .rowdel { opacity: 1; }
+@media (hover: none) { .row .rowdel { opacity: .6; } }
+.row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip { font-size: 11px; background: var(--chip); color: var(--muted); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+.chip.on { color: var(--ok); }
+.chip.var { background: var(--accent-soft); color: var(--accent); }
+.hint { font-size: 12px; color: var(--faint); }
+
+/* editor */
+.editor { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.ed-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.ed-title b { font-size: 15px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 5px 11px; background: var(--panel); color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
+.affix { display: flex; }
+.affix [data-prefix] { width: 76px; flex: none; border-radius: 7px 0 0 7px; border-right: 0; background: var(--code-bg); }
+.affix [data-field] { border-radius: 0 7px 7px 0; }
+[data-final]:empty { display: none; }
+.fld > span {display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+.opts { border: 1px solid var(--line); border-radius: 10px; }
+.opt { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.opt:last-child { border-bottom: 0; }
+.opt input[type=text] { padding: 4px 8px; }
+.opt .src { font-size: 11px; color: var(--faint); white-space: nowrap; max-width: 30%; overflow: hidden; text-overflow: ellipsis; }
+.opt-preview { margin: 0 8px 8px; }
+.ed-foot { display: flex; justify-content: flex-end; gap: 6px; align-items: center; }
+.ed-foot .err { margin: 0 auto 0 0; }
+.empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+.vars-head { padding: 10px 14px 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.var { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--line); }
+.var.editing { background: var(--sel); }
+.var .info { flex: 1; min-width: 0; }
+.var .sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+code, .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg); border-radius: 8px; padding: 9px 11px; margin: 0; font: 12.5px/1.5 ui-monospace, Consolas, monospace; max-height: 260px; overflow: auto; }
+
+/* macro tab */
+.stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; }
+.stat b { font-size: 18px; display: block; }
+.stat span { font-size: 12px; color: var(--muted); }
+.wbox { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; }
+.wbox h3 { margin: 0; font-size: 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.wbox.manual h3 { color: var(--warn); }
+.wbox ul { margin: 0; padding: 8px 14px 10px 32px; }
+.wbox li { margin: 3px 0; }
+.wbox .where { color: var(--muted); font-size: 12px; }
+.sec { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
+.sec summary { padding: 8px 12px; cursor: pointer; display: flex; gap: 6px; align-items: center; }
+.sec .body { padding: 0 12px 12px; display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 720px) { .sec .body { grid-template-columns: minmax(0, 1fr); } }
+.sec .body .lbl { font-size: 12px; color: var(--muted); }
+.regexbar { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.regexbar-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 12px; }
+.regexbar-head > span { flex: 1 1 220px; }
+.regexbar b { color: var(--text); }
+#regexListWrap { border-top: 1px solid var(--line); }
+#regexListWrap .toolbar { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.rx-sum { color: var(--warn); white-space: nowrap; }
+.rx-patch { display: flex; gap: 5px; align-items: center; cursor: pointer; margin-left: 6px; }
+.rxlist { max-height: 320px; overflow: auto; user-select: none; color: var(--text); font-size: 14px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <span class="brand">ST→ME</span>
+    <button id="openBtn">파일 열기</button>
+    <input id="presetName" type="text" placeholder="프리셋 이름" class="hidden">
+    <button id="resetBtn" class="ghost hidden" title="작업을 지우고 처음부터">새로 시작</button>
+    <button id="download" class="primary hidden">내보내기</button>
+  </div>
+  <nav id="tabs" class="tabs hidden">
+    <button class="tab on" data-tab="vars">토글 → 변수</button>
+    <button class="tab" data-tab="macro">매크로 변환 <span id="warnBadge" class="badge"></span></button>
+  </nav>
+</header>
+<input id="file" type="file" accept=".json,application/json" class="hidden">
+
+<main>
+  <div id="drop" class="drop">
+    <b>실리태번 프리셋 JSON을 끌어다 놓으십시오</b>
+    <span>또는 눌러서 파일 고르기 · 파일은 이 브라우저 안에서만 처리됩니다</span>
+    <div id="loadError" class="err hidden"></div>
+  </div>
+
+  <div id="regexBar" class="regexbar hidden">
+    <div class="regexbar-head">
+      <span>이 프리셋에 정규식 <b id="regexCount"></b>개가 들어 있습니다. 파일 하나로 받아서 마리나라 정규식 메뉴에서 한 번에 가져올 수 있습니다. <span id="regexSafetySummary" class="rx-sum"></span></span>
+      <button class="ghost" id="regexToggle">목록 보기</button>
+      <button id="regexDownload">정규식 받기</button>
+    </div>
+    <div id="regexListWrap" class="hidden">
+      <div class="toolbar">
+        <button class="ghost" id="rxAll">전체 선택</button>
+        <button class="ghost" id="rxNone">선택 해제</button>
+        <label class="hint rx-patch" title="마리나라 안전 검사에 걸리는 정규식의 끝없는 반복에 상한을 붙여 통과시킵니다"><input type="checkbox" id="rxPatch" checked> 안전 검사 자동 보정</label>
+        <span class="count"><span class="only-mouse">Shift+클릭: 범위 선택</span></span>
+      </div>
+      <div id="regexList" class="rxlist"></div>
+    </div>
+  </div>
+
+  <section id="tab-vars" class="hidden">
+    <div class="cols">
+      <div class="pane" id="listPane">
+        <div class="sheet-head"><b>원본 토글</b><span class="hint" id="sheetCount"></span><button class="primary" id="listDone">완료</button></div>
+        <div class="pane-head">
+          <div class="search">
+            <input id="search" type="text" placeholder="토글 이름 검색 (Enter)">
+            <select id="filter" aria-label="목록 필터">
+              <option value="all">전체</option>
+              <option value="free">안 묶인 것</option>
+              <option value="on">켜진 것</option>
+              <option value="off">꺼진 것</option>
+              <option value="removed">삭제한 것</option>
+            </select>
+          </div>
+          <div class="toolbar">
+            <button class="ghost" id="selAll" title="지금 보이는 토글을 모두 선택">전체 선택</button>
+            <button class="ghost" id="selNone" title="선택 모두 해제 (Esc)">선택 해제</button>
+            <button class="ghost" id="selInvert" title="보이는 토글의 선택을 뒤집기">반전</button>
+            <button class="ghost hidden" id="selRemove" title="선택한 토글을 변환 결과에서 빼기 (되살릴 수 있습니다)">선택 삭제</button>
+            <span class="count" id="selCount"></span>
+          </div>
+          <div class="hint"><span class="only-mouse">Shift+클릭</span><span class="only-touch">길게 누르기</span>: 범위 선택 · 그룹 제목 누르기: 그룹 전체 선택</div>
+        </div>
+        <div id="list" class="list"></div>
+      </div>
+
+      <div class="right">
+        <div class="pane" id="editorPane">
+          <div id="editor"></div>
+        </div>
+        <div class="pane hidden" id="varsPane"><div id="vars" class="vars"></div></div>
+      </div>
+    </div>
+    <div class="backdrop" id="backdrop"></div>
+    <button class="lfab" id="listFab">원본 토글 고르기</button>
+  </section>
+
+  <section id="tab-macro" class="hidden"></section>
+
+</main>
+
+<script id="stme-core">
+(function (root) {
+  "use strict";
+
+  // ── ids ──
+  const ID_ALPHABET = "useandom-26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict";
+  function newId() {
+    const bytes = new Uint8Array(21);
+    root.crypto.getRandomValues(bytes);
+    let id = "";
+    for (const b of bytes) id += ID_ALPHABET[b & 63];
+    return id;
+  }
+
+  // ── warnings ──
+  function makeReport() {
+    const map = new Map();
+    return {
+      add(kind, message, where) {
+        const key = kind + "|" + message;
+        if (!map.has(key)) map.set(key, { kind, message, where: new Set() });
+        if (where) map.get(key).where.add(where);
+      },
+      list() { return [...map.values()].map((w) => ({ kind: w.kind, message: w.message, where: [...w.where] })); },
+    };
+  }
+
+  // ── lexer: split text into plain text and {{macro}} tokens (nested braces kept inside) ──
+  function lex(text) {
+    const tokens = [];
+    let i = 0, textStart = 0;
+    while (i < text.length) {
+      if (text.startsWith("{{", i)) {
+        let j = i + 2, depth = 1;
+        while (j < text.length && depth > 0) {
+          if (text.startsWith("{{", j)) { depth++; j += 2; }
+          else if (text.startsWith("}}", j)) { depth--; j += 2; }
+          else j++;
+        }
+        if (depth !== 0) break; // unclosed: rest is plain text
+        if (i > textStart) tokens.push({ t: "text", v: text.slice(textStart, i) });
+        tokens.push({ t: "macro", raw: text.slice(i, j), inner: text.slice(i + 2, j - 2) });
+        i = j; textStart = j;
+      } else i++;
+    }
+    if (textStart < text.length) tokens.push({ t: "text", v: text.slice(textStart) });
+    return tokens;
+  }
+
+  // Split on a separator while ignoring separators inside nested {{ }}.
+  function splitTop(str, sep) {
+    const parts = [];
+    let depth = 0, start = 0;
+    for (let i = 0; i < str.length; i++) {
+      if (str.startsWith("{{", i)) { depth++; i++; continue; }
+      if (str.startsWith("}}", i)) { depth--; i++; continue; }
+      if (depth === 0 && str.startsWith(sep, i)) { parts.push(str.slice(start, i)); start = i + sep.length; i += sep.length - 1; }
+    }
+    parts.push(str.slice(start));
+    return parts;
+  }
+
+  const VAR_IDENT = /^[a-zA-Z](?:[\w-]*\w)?/;
+  const SHORTHAND_OPS = ["++", "--", "??=", "??", "||=", "||", "-=", "==", "!=", ">=", ">", "<=", "<", "+=", "="];
+
+  // Parse a macro's inner text into flags / name / argument text.
+  function parseHead(inner) {
+    let i = 0;
+    const s = inner;
+    const ws = () => { while (i < s.length && /\s/.test(s[i])) i++; };
+    ws();
+    if (s.startsWith("//", i)) return { kind: "comment" };
+    const flags = [];
+    while (i < s.length && "!?~>#/".includes(s[i])) {
+      if (s[i] === "/" && s[i + 1] === "/") break;
+      flags.push(s[i]); i++; ws();
+    }
+    if (s.startsWith("//", i)) return { kind: "comment" };
+    if (s[i] === "." || s[i] === "$") {
+      const m = s.slice(i + 1).match(VAR_IDENT);
+      if (m) {
+        const after = s.slice(i + 1 + m[0].length).trim();
+        let op = null, value = "";
+        if (after) {
+          op = SHORTHAND_OPS.find((o) => after.startsWith(o));
+          if (!op) return null;
+          value = after.slice(op.length).trim();
+        }
+        return { kind: "shorthand", flags, global: s[i] === "$", varName: m[0], op, value };
+      }
+    }
+    const m = s.slice(i).match(/^[a-zA-Z_][\w-]*/);
+    if (!m) return null;
+    const name = m[0];
+    const rest = s.slice(i + name.length);
+    let args;
+    if (/^\s*$/.test(rest)) args = [];
+    else if (rest.startsWith("::")) args = splitTop(rest.slice(2), "::");
+    else if (rest.startsWith(":")) args = [rest.slice(1)];
+    else if (/^\s/.test(rest)) {
+      const r = rest.trim();
+      args = r.startsWith("::") ? splitTop(r.slice(2), "::") : [r];
+    } else return null;
+    return { kind: "macro", flags, closing: flags.includes("/"), name, lname: name.toLowerCase(), args: args.map((a) => a.trim()), rest };
+  }
+
+  // ── ST macro tables ──
+  const RENAME = {
+    user: "user", char: "char", group: "group", input: "input", model: "model",
+    description: "description", chardescription: "description",
+    personality: "personality", charpersonality: "personality",
+    scenario: "scenario", charscenario: "scenario",
+    persona: "personaDescription",
+    mesexamples: "example", mesexamplesraw: "example",
+    charprompt: "charSysInfo", charinstruction: "charPostHistory",
+    lastgenerationtype: "lastGenerationType",
+    idleduration: "idle_duration", idle_duration: "idle_duration",
+    date: "date", time: "time", weekday: "weekday", isotime: "isotime",
+    noop: "noop", trim: "trim",
+  };
+  const APPROX_RENAME = {
+    groupnotmuted: ["group", "{{groupNotMuted}} → {{group}} (음소거 여부는 구분하지 않습니다)"],
+    charifnotgroup: ["char", "{{charIfNotGroup}} → {{char}} (그룹 채팅에서도 캐릭터 이름이 들어갑니다)"],
+    isodate: ["date", "{{isodate}} → {{date}}"],
+    lastusermessage: ["input", "{{lastUserMessage}} → {{input}} (마리나라의 '가장 최근 사용자 메시지'입니다. 거의 같습니다)"],
+  };
+  const UNSUPPORTED = new Set([
+    "lastmessage", "lastmessageid", "lastcharmessage", "firstincludedmessageid", "firstdisplayedmessageid",
+    "lastswipeid", "currentswipeid", "allchatrange", "maxprompt", "maxprompttokens", "maxcontext", "maxcontexttokens",
+    "maxresponse", "maxresponsetokens", "notchar", "chardepthprompt", "charcreatornotes", "creatornotes", "charfirstmessage",
+    "greeting", "charversion", "original", "ismobile", "systemprompt", "hasextension", "datetimeformat", "timediff",
+    "setvarkey", "getvarkey", "setvarindex", "getvarindex", "setglobalvarkey", "getglobalvarkey", "setglobalvarindex",
+    "getglobalvarindex", "format", "formula", "lastchatmessage", "mesexamplesraw_", "instructinput", "instructoutput",
+    "instructsystem", "instructsystemprompt", "instructstoryprefix", "instructstorystring", "chatstart", "examplesseparator",
+    "chatseparator", "exampleseparator", "systemprefix", "systemsuffix",
+  ]);
+  const VAR_SAME = new Set(["getvar", "setvar", "addvar", "incvar", "decvar"]);
+  const VAR_GLOBAL = { getglobalvar: "getvar", setglobalvar: "setvar", addglobalvar: "addvar", incglobalvar: "incvar", decglobalvar: "decvar" };
+  const HASVAR = new Set(["hasvar", "varexists", "hasglobalvar", "globalvarexists"]);
+  const DELVAR = new Set(["deletevar", "flushvar", "deleteglobalvar", "flushglobalvar"]);
+  const ME_NATIVE_BLOCKS = new Set(["uppercase", "lowercase"]);
+  // ST macros whose {{name}}content{{/name}} form passes the content as the last argument.
+  const SCOPED_CONTENT = new Set([...VAR_SAME, ...Object.keys(VAR_GLOBAL), "random", "pick", "roll", "banned", "outlet", "reverse", "trim"]);
+  const ME_PASSTHROUGH = new Set(["random", "roll", "outlet", "trimstart", "trimend", "addnumvar", "datetime", "timezone",
+    "include", "lorebooksize", "agent", "newline", "uppercase", "lowercase", "banned"]);
+
+  const mac = (name, ...args) => "{{" + [name, ...args].join("::") + "}}";
+  function quote(v) {
+    const toks = lex(v.trim());
+    if (toks.length === 1 && toks[0].t === "macro") return v.trim();
+    return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n") + '"';
+  }
+  const ifElse = (cond, a, b) => "{{#if " + cond + "}}" + a + (b !== undefined && b !== null ? "{{else}}" + b : "") + "{{/if}}";
+
+  function fixLegacyText(v) {
+    return v.replace(/<USER>/g, "{{user}}").replace(/<BOT>|<CHAR>|<CHARIFNOTGROUP>/g, "{{char}}").replace(/<GROUP>/g, "{{group}}");
+  }
+
+  // ── converter (one instance per section so warnings know where they came from) ──
+  function makeConverter(report) {
+    let where = "";
+
+    function convertText(text) {
+      const tokens = lex(text);
+      const pairs = pairBlocks(tokens);
+      return convertTokens(tokens, 0, tokens.length, pairs);
+    }
+
+    function pairBlocks(tokens) {
+      const pairs = new Map();
+      const stack = [];
+      tokens.forEach((tok, k) => {
+        if (tok.t !== "macro") return;
+        const h = parseHead(tok.inner);
+        tok.head = h;
+        if (!h || h.kind !== "macro") return;
+        if (h.closing) {
+          for (let s = stack.length - 1; s >= 0; s--) {
+            if (stack[s].lname === h.lname) { pairs.set(stack[s].k, k); stack.length = s; return; }
+          }
+          return;
+        }
+        if (h.lname !== "else") stack.push({ lname: h.lname, k });
+      });
+      return pairs;
+    }
+
+    function convertTokens(tokens, from, to, pairs) {
+      let out = "";
+      for (let k = from; k < to; k++) {
+        const tok = tokens[k];
+        if (tok.t === "text") { out += fixLegacyText(tok.v); continue; }
+        if (pairs.has(k)) {
+          const close = pairs.get(k);
+          out += convertScoped(tokens, k, close, pairs);
+          k = close;
+          continue;
+        }
+        out += convertMacro(tok, null);
+      }
+      return out;
+    }
+
+    function convertScoped(tokens, open, close, pairs) {
+      const h = tokens[open].head;
+      if (h.lname === "if") return convertIf(h, tokens, open + 1, close, pairs);
+      if (ME_NATIVE_BLOCKS.has(h.lname)) return "{{" + h.lname + "}}" + convertTokens(tokens, open + 1, close, pairs) + "{{/" + h.lname + "}}";
+      let content = convertTokens(tokens, open + 1, close, pairs);
+      if (!SCOPED_CONTENT.has(h.lname)) return convertMacro(tokens[open], null) + content + tokens[close].raw;
+      if (!h.flags.includes("#")) content = content.trim();
+      if (h.lname === "trim") return content;
+      return convertMacro(tokens[open], content);
+    }
+
+    function convertIf(h, tokens, from, to, pairs) {
+      let elseAt = -1;
+      for (let k = from; k < to; k++) {
+        if (pairs.has(k)) { k = pairs.get(k); continue; }
+        const t = tokens[k];
+        if (t.t === "macro" && t.head && t.head.kind === "macro" && !t.head.closing && t.head.lname === "else") { elseAt = k; break; }
+      }
+      const a = convertTokens(tokens, from, elseAt >= 0 ? elseAt : to, pairs);
+      const b = elseAt >= 0 ? convertTokens(tokens, elseAt + 1, to, pairs) : undefined;
+      const rawCond = h.rest.replace(/^\s*::?/, "").trim();
+      const { cond, inverted } = convertCondition(rawCond);
+      if (!inverted) return ifElse(cond, a, b);
+      return ifElse(cond, b === undefined ? "" : b, a);
+    }
+
+    function convertCondition(raw) {
+      let c = raw.trim();
+      let inverted = false;
+      if (c.startsWith("!")) { inverted = true; c = c.replace(/^!\s*/, ""); }
+      let m = c.match(/^([.$])([a-zA-Z](?:[\w-]*\w)?)$/);
+      if (m) { if (m[1] === "$") globalWarn(); return { cond: "var:" + m[2], inverted }; }
+      m = c.match(/^\{\{\s*([.$])([a-zA-Z](?:[\w-]*\w)?)\s*(==|!=|>=|<=|>|<)\s*([\s\S]*?)\s*\}\}$/);
+      if (m) { if (m[1] === "$") globalWarn(); return { cond: "var:" + m[2] + " " + m[3] + " " + quote(convertText(m[4])), inverted }; }
+      m = c.match(/^\{\{\s*get(global)?var\s*::\s*([\w.-]+)\s*\}\}$/i);
+      if (m) { if (m[1]) globalWarn(); return { cond: "var:" + m[2], inverted }; }
+      if (/^[a-zA-Z_][\w-]*$/.test(c)) {
+        const l = c.toLowerCase();
+        if (RENAME[l] || APPROX_RENAME[l] || UNSUPPORTED.has(l)) return { cond: convertText("{{" + c + "}}"), inverted };
+        report.add("info", `조건 '${c}'은(는) 실리태번 매크로가 아니라서 글자 그대로("${c}") 비교하도록 바꿨습니다. 실리태번에서도 항상 참이었습니다.`, where);
+        return { cond: quote(c), inverted };
+      }
+      if (c.includes("{{")) return { cond: convertText(c), inverted };
+      return { cond: c ? quote(c) : '""', inverted };
+    }
+
+    function globalWarn() {
+      report.add("approx", "전역 변수($변수, getglobalvar 등)를 일반 변수로 바꿨습니다. 마리나라에는 전역 변수가 없어서 값이 채팅마다 따로 저장됩니다.", where);
+    }
+
+    function convertShorthand(h) {
+      const n = h.varName;
+      if (h.global) globalWarn();
+      const v = convertText(h.value || "");
+      switch (h.op) {
+        case null: return mac("getvar", n);
+        case "=": return mac("setvar", n, v);
+        case "++": return mac("incvar", n);
+        case "--": return mac("decvar", n);
+        case "+=": return mac("addvar", n, v);
+        case "-=":
+          if (/^-?\d+(\.\d+)?$/.test(v.trim())) {
+            const num = v.trim();
+            return mac("addnumvar", n, num.startsWith("-") ? num.slice(1) : "-" + num);
+          }
+          report.add("manual", `{{.${n} -= ...}}의 값이 숫자가 아니라서 바꾸지 못했습니다. 직접 고쳐야 합니다.`, where);
+          return "{{." + n + " -= " + v + "}}";
+        case "||":
+        case "??":
+          if (h.op === "??") report.add("approx", "?? (값이 없을 때 기본값)는 '값이 비었거나 거짓일 때'로 바꿨습니다. 거의 같지만 값이 0이나 false일 때만 다릅니다.", where);
+          return ifElse("var:" + n, mac("getvar", n), v);
+        case "||=":
+        case "??=":
+          if (h.op === "??=") report.add("approx", "??= 는 '값이 비었거나 거짓일 때 저장'으로 바꿨습니다.", where);
+          return ifElse("var:" + n, mac("getvar", n), mac("setvar", n, v) + v);
+        default:
+          report.add("approx", "변수 비교({{.x == 값}})는 마리나라 조건문으로 바꿨습니다. 마리나라는 대소문자를 구분하지 않고, 숫자는 숫자로 비교합니다.", where);
+          return ifElse("var:" + n + " " + h.op + " " + quote(v), "true", "false");
+      }
+    }
+
+    function convertMacro(tok, scoped) {
+      const h = tok.head !== undefined ? tok.head : parseHead(tok.inner);
+      if (!h) return tok.raw;
+      if (h.kind === "comment") return tok.raw;
+      if (h.kind === "shorthand") return convertShorthand(h);
+      if (h.closing) return tok.raw;
+      if (h.flags.includes(">")) report.add("manual", `{{>${h.name} ...}} 처럼 필터(>) 표시가 붙은 매크로는 표시만 떼고 바꿨습니다. 필터 동작은 확인이 필요합니다.`, where);
+      const l = h.lname;
+      const args = h.args.map(convertText);
+      if (scoped !== null) args.push(scoped);
+
+      if (l === "if") { // non-scoped form {{if::cond::content}}
+        if (args.length < 2) return tok.raw;
+        const { cond, inverted } = convertCondition(h.args[0]);
+        return inverted ? ifElse(cond, "", args[1]) : ifElse(cond, args[1]);
+      }
+      if (l === "else") return "{{else}}";
+      if (RENAME[l]) {
+        if (args.length) { report.add("manual", `{{${h.name}}}에 붙은 인자는 마리나라에서 쓸 수 없어서 원문 그대로 두었습니다.`, where); return tok.raw; }
+        return "{{" + RENAME[l] + "}}";
+      }
+      if (APPROX_RENAME[l]) { report.add("approx", APPROX_RENAME[l][1], where); return "{{" + APPROX_RENAME[l][0] + "}}"; }
+      if (VAR_SAME.has(l)) return mac(l, ...args);
+      if (VAR_GLOBAL[l]) { globalWarn(); return mac(VAR_GLOBAL[l], ...args); }
+      if (HASVAR.has(l)) {
+        if (l.includes("global")) globalWarn();
+        report.add("approx", "hasvar(변수가 있는지)는 '값이 비어 있지 않은지'로 바꿨습니다.", where);
+        return ifElse("var:" + (args[0] || ""), "true", "false");
+      }
+      if (DELVAR.has(l)) {
+        if (l.includes("global")) globalWarn();
+        report.add("approx", "deletevar(변수 지우기)는 '값을 비우기'로 바꿨습니다.", where);
+        return mac("setvar", args[0] || "", "");
+      }
+      switch (l) {
+        case "newline": {
+          const n = parseInt(args[0] || "1", 10);
+          return "{{newline}}".repeat(n > 0 ? n : 1);
+        }
+        case "space": {
+          const n = parseInt(args[0] || "1", 10);
+          return " ".repeat(n > 0 ? n : 1);
+        }
+        case "roll": {
+          if (!args[0]) return tok.raw;
+          const a = args[0].replace(/\s+/g, "");
+          return "{{roll:" + (/^\d+$/.test(a) ? "1d" + a : a) + "}}";
+        }
+        case "random":
+        case "pick": {
+          if (l === "pick") report.add("approx", "{{pick}}을 {{random}}으로 바꿨습니다. pick은 항상 같은 값을 골랐지만, random은 메시지마다 새로 고릅니다.", where);
+          // Legacy {{random:a,b,c}} lists options with commas; {{random::a::b}} with "::".
+          const legacy = !h.rest.trimStart().startsWith("::");
+          const opts = legacy && args.length === 1 ? splitTop(args[0], ",").map((x) => x.trim()) : args;
+          if (!opts.length) return "{{random}}";
+          return mac("random", ...opts);
+        }
+        case "banned":
+          return '{{banned "' + (args[0] || "").replace(/"/g, '\\"') + '"}}';
+        case "outlet":
+          return mac("outlet", ...args);
+        case "reverse":
+          if (args[0] !== undefined && !args[0].includes("{{")) return [...args[0]].reverse().join("");
+          report.add("manual", "{{reverse}} 안에 매크로가 있어서 바꾸지 못했습니다.", where);
+          return tok.raw;
+      }
+      if (UNSUPPORTED.has(l)) {
+        report.add("manual", `{{${h.name}}}은(는) 마리나라에 같은 기능이 없어서 원문 그대로 두었습니다.`, where);
+        return tok.raw;
+      }
+      if (ME_PASSTHROUGH.has(l)) return tok.raw;
+      return tok.raw; // unknown: custom/preset variable or plain text
+    }
+
+    return {
+      convert(text, label) { where = label || ""; return convertText(text || ""); },
+    };
+  }
+
+  // ── preset structure ──
+  const MARKER_DISPLAY_NAMES = { character: "Character Info", world_info_before: "World Info (before)", world_info_after: "World Info (after)", persona: "Persona", chat_history: "Chat History", dialogue_examples: "Chat Examples" };
+  function mapSTMarkerConfig(identifier, legacy) {
+    if (legacy && (identifier === "worldInfoBefore" || identifier === "worldInfoAfter")) return { type: "lorebook" };
+    switch (identifier) {
+      case "chatHistory": return { type: "chat_history" };
+      case "charDescription": case "charPersonality": case "scenario": case "enhanceDefinitions": return { type: "character" };
+      case "personaDescription": return { type: "persona" };
+      case "worldInfoBefore": return { type: "world_info_before" };
+      case "worldInfoAfter": return { type: "world_info_after" };
+      case "dialogueExamples": return { type: "dialogue_examples" };
+      default: return null;
+    }
+  }
+
+  function guessPresetName(raw, fileName) {
+    if (typeof raw.name === "string" && raw.name.trim()) return raw.name.trim();
+    if (fileName) return fileName.replace(/\.json$/i, "");
+    return "SillyTavern Preset";
+  }
+
+  function parseST(raw, fileName, opts = {}) {
+    if (!raw || !Array.isArray(raw.prompts)) throw new Error("실리태번 프롬프트 프리셋이 아닙니다 (prompts 목록이 없습니다).");
+    const report = makeReport();
+    const conv = makeConverter(report);
+    const orderDef = (raw.prompt_order || []).find((o) => o.character_id === 100001) || (raw.prompt_order || [])[0];
+    const orderMap = new Map(((orderDef && orderDef.order) || []).map((o, i) => [o.identifier, { index: i, enabled: o.enabled }]));
+    const chatHistoryIndex = orderMap.has("chatHistory") ? orderMap.get("chatHistory").index : Number.MAX_SAFE_INTEGER;
+    const idx = (p) => (orderMap.has(p.identifier) ? orderMap.get(p.identifier).index : Number.MAX_SAFE_INTEGER);
+    // ST never sends prompts that dropped out of prompt_order; they are leftovers, so they are not converted.
+    const used = orderMap.size && !opts.legacy ? raw.prompts.filter((p) => orderMap.has(p.identifier)) : raw.prompts;
+    const orphanCount = raw.prompts.length - used.length;
+    const sorted = [...used].sort((a, b) => idx(a) - idx(b));
+
+    const groups = [];
+    const groupOf = new Map();
+    const openStack = [];
+    sorted.forEach((entry, i) => {
+      const name = entry.name || "";
+      const divider = opts.legacy || !entry.marker; // markers never open or close a bracket group
+      if (divider && /^[┌┎⌈⌜]/.test(name)) openStack.push({ name: name.replace(/^[┌┎⌈⌜]\s*/, "").replace(/\s*[┐┑┒┓⌉⌝]$/, "").trim(), startIdx: i });
+      else if (divider && /^[└┖⌊⌞]/.test(name) && openStack.length) {
+        const open = openStack.pop();
+        const g = { id: newId(), name: open.name, parentGroupId: null, order: 100, enabled: true };
+        groups.push(g);
+        for (let j = open.startIdx + 1; j < i; j++) groupOf.set(sorted[j].identifier, g.id);
+      }
+    });
+
+    const sections = [];
+    const emitted = new Set();
+    for (const entry of sorted) {
+      const name = entry.name || "";
+      // Empty bracket entries are visual dividers; markers named with a bracket (e.g. "└ World Info") are real.
+      if ((opts.legacy || !entry.marker) && /^[┌└┎┖⌈⌊⌜⌞]/.test(name) && !(entry.content || "").trim()) continue;
+      const marker = entry.marker ? mapSTMarkerConfig(entry.identifier, opts.legacy) : null;
+      if (marker) { if (emitted.has(marker.type)) continue; emitted.add(marker.type); }
+      let role = "system";
+      if (entry.role === "user") role = "user";
+      if (entry.role === "assistant") role = "assistant";
+      const isPostHistory = idx(entry) > chatHistoryIndex && /(?:jailbreak|post[_-]?history|posthistory)/i.test(entry.identifier + " " + name);
+      if (isPostHistory) role = "user";
+      const orderInfo = orderMap.get(entry.identifier);
+      const enabled = orderInfo ? orderInfo.enabled !== false : entry.enabled !== false;
+      const original = entry.content || "";
+      sections.push({
+        id: newId(),
+        identifier: entry.identifier,
+        name: marker ? (MARKER_DISPLAY_NAMES[marker.type] || name) : name,
+        originalContent: original,
+        content: marker ? original : conv.convert(original, name),
+        role,
+        enabled,
+        isMarker: !!marker,
+        markerConfig: marker,
+        injectionPosition: isPostHistory || entry.injection_position === 1 ? "depth" : "ordered",
+        injectionDepth: isPostHistory ? 0 : (entry.injection_depth || 0),
+        injectionOrder: entry.injection_order ?? 100,
+        groupId: isPostHistory ? null : (groupOf.get(entry.identifier) || null),
+        forbidOverrides: !!entry.forbid_overrides,
+      });
+    }
+    const regexScripts = convertRegexScripts(raw, conv, report);
+    const regexSafety = regexScripts.map((s) => checkRegexSafety(s.findRegex, report, "정규식: " + s.scriptName));
+    if (orphanCount) report.add("info", `프롬프트 목록에서 빠져 있어 실리태번이 보내지 않던 프롬프트 ${orphanCount}개는 변환하지 않았습니다.`);
+    return { name: guessPresetName(raw, fileName), sections, groups, regexScripts, regexSafety, orphanCount, report, converter: conv };
+  }
+
+  // ── preset-bound regex scripts ──
+  const ST_REGEX_PLACEMENTS = { 3: "슬래시 명령", 5: "월드 인포", 6: "추론(Reasoning)" };
+  function convertRegexScripts(raw, conv, report) {
+    const scripts = raw.extensions && Array.isArray(raw.extensions.regex_scripts) ? raw.extensions.regex_scripts : [];
+    return scripts.filter((s) => s && typeof s === "object").map((s, i) => {
+      const name = String(s.scriptName || s.name || `정규식 ${i + 1}`);
+      const where = "정규식: " + name;
+      const out = { ...s, scriptName: name };
+      if (typeof s.replaceString === "string") out.replaceString = conv.convert(s.replaceString, where);
+      if (Array.isArray(s.trimStrings)) out.trimStrings = s.trimStrings.map((t) => (typeof t === "string" ? conv.convert(t, where) : t));
+      if (typeof s.findRegex === "string" && s.findRegex.includes("{{")) {
+        if (s.substituteRegex) out.findRegex = conv.convert(s.findRegex, where);
+        else report.add("manual", "찾을 패턴에 {{ }}가 있는 정규식입니다. 실리태번은 이것을 글자 그대로 찾았지만, 마리나라는 매크로로 풀어서 찾습니다. 의도대로 동작하는지 확인해야 합니다.", where);
+      }
+      const lost = (Array.isArray(s.placement) ? s.placement : []).map((p) => ST_REGEX_PLACEMENTS[p]).filter(Boolean);
+      if (lost.length) report.add("approx", `정규식의 적용 위치 중 ${lost.join(", ")}은(는) 마리나라에 없어서 빠집니다.`, where);
+      return out;
+    });
+  }
+
+  const REGEX_BOUND = 9999;
+  const splitDelimited = (find) => {
+    const m = /^\/(.+)\/([dgimsuy]*)$/s.exec(find);
+    return m ? { source: m[1], wrap: (src) => `/${src}/${m[2]}`, flags: m[2] || "g" } : { source: find, wrap: (src) => src, flags: "g" };
+  };
+  const safetyProbe = (src) => src.replace(/\{\{[^}]*\}\}/g, "x");
+
+  function boundBroadRepeats(src) {
+    let out = "", i = 0;
+    while (i < src.length) {
+      let atom, broad;
+      if (src[i] === "\\") {
+        atom = src.slice(i, i + 2);
+        broad = /[sSwWdD]/.test(src[i + 1] || "");
+      } else if (src[i] === "[") {
+        const close = findCharClassClose(src, i);
+        if (close === -1) return src;
+        atom = src.slice(i, close + 1);
+        broad = isBroadCharacterClass(atom);
+      } else {
+        atom = src[i];
+        broad = atom === ".";
+      }
+      out += atom;
+      i += atom.length;
+      if (!broad) continue;
+      if (src[i] === "*") { out += `{0,${REGEX_BOUND}}`; i++; }
+      else if (src[i] === "+") { out += `{1,${REGEX_BOUND}}`; i++; }
+      else if (src[i] === "{") {
+        const m = /^\{(\d+),\}/.exec(src.slice(i));
+        if (m) { out += `{${m[1]},${REGEX_BOUND}}`; i += m[0].length; }
+      }
+    }
+    return out;
+  }
+
+  // status: "ok" passes as-is, "fixed" passes once bounded (patched holds the new findRegex), "unfixable" never passes.
+  function checkRegexSafety(find, report, where) {
+    if (typeof find !== "string" || !find) return { status: "ok" };
+    const { source, wrap, flags } = splitDelimited(find);
+    if (isPatternSafe(safetyProbe(source))) return { status: "ok" };
+    const bounded = boundBroadRepeats(source);
+    let compiles = true;
+    try { new RegExp(bounded, flags); } catch { compiles = false; }
+    if (compiles && bounded !== source && isPatternSafe(safetyProbe(bounded))) {
+      report.add("info", `마리나라 안전 검사에 걸리는 정규식이라, 끝없는 반복에 상한(${REGEX_BOUND}글자)을 붙여 통과하게 보정했습니다. 정규식 목록에서 보정을 끌 수 있습니다.`, where);
+      return { status: "fixed", patched: wrap(bounded) };
+    }
+    const reason = safetyProbe(compiles ? bounded : source).length > 1000 ? "패턴이 1000자를 넘습니다" : "반복이 겹쳐 있습니다";
+    report.add("manual", `마리나라 안전 검사에 걸려 실행되지 않는 정규식입니다 (${reason}). 마리나라 정규식 편집기에서 패턴을 다듬어야 합니다.`, where);
+    return { status: "unfixable", reason };
+  }
+  
+  const SAFETY_MAX_LENGTH = 1000, SAFETY_MAX_STAR_HEIGHT = 1;
+  const INVALID_QUANTIFIER = Symbol("invalid-quantifier");
+
+  function isPatternSafe(source) {
+    if (typeof source !== "string") return false;
+    if (source.length === 0) return true;
+    if (source.length > SAFETY_MAX_LENGTH) return false;
+    if (hasPolynomialBacktrackingRisk(source)) return false;
+    let i = 0, groupDepth = 0, topLevelHeight = 0;
+    const groupInnerHeight = [], groupBodyStart = [];
+    const recordAtomHeight = (h) => {
+      if (groupDepth > 0) {
+        const idx = groupInnerHeight.length - 1;
+        if (h > groupInnerHeight[idx]) groupInnerHeight[idx] = h;
+      } else if (h > topLevelHeight) topLevelHeight = h;
+    };
+    while (i < source.length) {
+      const c = source[i];
+      if (c === "\\") {
+        const atomEnd = consumeEscapedAtom(source, i);
+        if (atomEnd === null) return false;
+        const consumed = consumeQuantifier(source, atomEnd);
+        if (consumed === INVALID_QUANTIFIER) return false;
+        recordAtomHeight(consumed && consumed.addsStarHeight ? 1 : 0);
+        i = consumed ? consumed.end : atomEnd;
+        continue;
+      }
+      if (c === "[") {
+        const closeIdx = findCharClassClose(source, i);
+        if (closeIdx === -1) return false;
+        const atomEnd = closeIdx + 1;
+        const consumed = consumeQuantifier(source, atomEnd);
+        if (consumed === INVALID_QUANTIFIER) return false;
+        recordAtomHeight(consumed && consumed.addsStarHeight ? 1 : 0);
+        i = consumed ? consumed.end : atomEnd;
+        continue;
+      }
+      if (c === "(") {
+        groupDepth += 1;
+        groupInnerHeight.push(0);
+        const bodyStart = getGroupBodyStart(source, i);
+        if (bodyStart === null) return false;
+        groupBodyStart.push(bodyStart);
+        i = bodyStart;
+        continue;
+      }
+      if (c === ")") {
+        if (groupDepth === 0) return false;
+        const innerHeight = groupInnerHeight.pop() || 0;
+        const bodyStart = groupBodyStart.length ? groupBodyStart.pop() : i;
+        groupDepth -= 1;
+        const consumed = consumeQuantifier(source, i + 1);
+        if (consumed === INVALID_QUANTIFIER) return false;
+        const quantified = !!consumed && consumed.addsStarHeight === true;
+        if (quantified && hasUnsafeQuantifiedAlternation(source.slice(bodyStart, i))) return false;
+        const groupHeight = innerHeight + (quantified ? 1 : 0);
+        if (groupHeight > SAFETY_MAX_STAR_HEIGHT) return false;
+        recordAtomHeight(groupHeight);
+        i = consumed ? consumed.end : i + 1;
+        continue;
+      }
+      const atomEnd = i + 1;
+      const consumed = consumeQuantifier(source, atomEnd);
+      if (consumed === INVALID_QUANTIFIER) return false;
+      recordAtomHeight(consumed && consumed.addsStarHeight ? 1 : 0);
+      i = consumed ? consumed.end : atomEnd;
+    }
+    if (groupDepth !== 0) return false;
+    return topLevelHeight <= SAFETY_MAX_STAR_HEIGHT;
+  }
+
+  function consumeQuantifier(source, i) {
+    const c = source[i];
+    if (c === "*" || c === "+" || c === "?") {
+      const next = source[i + 1];
+      if (next === "+") return INVALID_QUANTIFIER;
+      return { end: next === "?" ? i + 2 : i + 1, addsStarHeight: c !== "?", unbounded: c !== "?", required: c === "+" };
+    }
+    if (c === "{") {
+      const close = source.indexOf("}", i + 1);
+      if (close === -1) return null;
+      const m = /^(\d+)(,(\d*))?$/.exec(source.slice(i + 1, close));
+      if (!m) return null;
+      const lo = Number(m[1]);
+      const hi = m[2] === undefined ? lo : m[3] === "" || m[3] === undefined ? Infinity : Number(m[3]);
+      if (!Number.isFinite(lo)) return INVALID_QUANTIFIER;
+      let next = close + 1;
+      if (source[next] === "+") return INVALID_QUANTIFIER;
+      if (source[next] === "?") next += 1;
+      return { end: next, addsStarHeight: true, unbounded: !Number.isFinite(hi), required: lo > 0 };
+    }
+    return null;
+  }
+
+  function consumeEscapedAtom(source, i) {
+    const next = source[i + 1];
+    if (next === undefined) return null;
+    if ((next === "p" || next === "P" || next === "u") && source[i + 2] === "{") {
+      const close = source.indexOf("}", i + 3);
+      return close === -1 ? null : close + 1;
+    }
+    return i + 2;
+  }
+
+  function getGroupBodyStart(source, openIdx) {
+    if (source[openIdx + 1] !== "?") return openIdx + 1;
+    const kind = source[openIdx + 2];
+    if (kind === ":" || kind === "=" || kind === "!") return openIdx + 3;
+    if (kind === "<") {
+      const lookbehindKind = source[openIdx + 3];
+      if (lookbehindKind === "=" || lookbehindKind === "!") return openIdx + 4;
+      const close = source.indexOf(">", openIdx + 3);
+      return close === -1 ? null : close + 1;
+    }
+    return null;
+  }
+
+  function findCharClassClose(source, openIdx) {
+    let j = openIdx + 1;
+    if (source[j] === "^") j += 1;
+    if (source[j] === "]") j += 1;
+    while (j < source.length) {
+      const c = source[j];
+      if (c === "\\") { j += 2; continue; }
+      if (c === "]") return j;
+      j += 1;
+    }
+    return -1;
+  }
+
+  function hasUnsafeQuantifiedAlternation(body) {
+    const tokenized = splitTopLevelAlternatives(body).map(tokenizeAlternative);
+    if (tokenized.length < 2) return false;
+    if (tokenized.some((tokens) => tokens.length === 0)) return true;
+    for (let i = 0; i < tokenized.length; i += 1) {
+      for (let j = i + 1; j < tokenized.length; j += 1) {
+        if (isTokenPrefix(tokenized[i], tokenized[j]) || isTokenPrefix(tokenized[j], tokenized[i])) return true;
+      }
+    }
+    return false;
+  }
+
+  function splitTopLevelAlternatives(body) {
+    const alternatives = [];
+    let start = 0, depth = 0, inClass = false;
+    for (let i = 0; i < body.length; i += 1) {
+      const c = body[i];
+      if (c === "\\") { i += 1; continue; }
+      if (inClass) { if (c === "]") inClass = false; continue; }
+      if (c === "[") { inClass = true; continue; }
+      if (c === "(") { depth += 1; continue; }
+      if (c === ")") { depth = Math.max(0, depth - 1); continue; }
+      if (c === "|" && depth === 0) { alternatives.push(body.slice(start, i)); start = i + 1; }
+    }
+    alternatives.push(body.slice(start));
+    return alternatives;
+  }
+
+  function tokenizeAlternative(alternative) {
+    const tokens = [];
+    for (let i = 0; i < alternative.length; i += 1) {
+      const c = alternative[i];
+      if (c === "\\") {
+        const end = consumeEscapedAtom(alternative, i);
+        if (end === null) return tokens;
+        tokens.push(alternative.slice(i, end));
+        i = end - 1;
+        continue;
+      }
+      if (c === "[") {
+        const close = findCharClassClose(alternative, i);
+        if (close === -1) return tokens;
+        tokens.push(alternative.slice(i, close + 1));
+        i = close;
+        continue;
+      }
+      if ("(){}*+?|^$.".includes(c)) return tokens;
+      tokens.push(c);
+    }
+    return tokens;
+  }
+
+  function isTokenPrefix(prefix, candidate) {
+    return prefix.length <= candidate.length && prefix.every((token, index) => candidate[index] === token);
+  }
+
+  function hasPolynomialBacktrackingRisk(source) {
+    let broadUnboundedCount = 0, adjacentBroadUnboundedCount = 0;
+    let pendingNegatedClassBoundary = null, countBeforePendingNegatedClass = 0;
+    const consumeRequiredLiteralBoundary = (literal) => {
+      adjacentBroadUnboundedCount = 0;
+      if (literal !== null && pendingNegatedClassBoundary !== null && !characterClassMatchesLiteral(pendingNegatedClassBoundary, literal)) {
+        broadUnboundedCount = countBeforePendingNegatedClass;
+        pendingNegatedClassBoundary = null;
+      }
+    };
+    const countBroad = () => {
+      broadUnboundedCount += 1;
+      adjacentBroadUnboundedCount += 1;
+      return adjacentBroadUnboundedCount >= 2 || broadUnboundedCount >= 3;
+    };
+    for (let i = 0; i < source.length;) {
+      const c = source[i];
+      if (c === "\\") {
+        const atomEnd = consumeEscapedAtom(source, i);
+        if (atomEnd === null) return true;
+        const consumed = consumeQuantifier(source, atomEnd);
+        if (consumed === INVALID_QUANTIFIER) return true;
+        if (consumed && consumed.unbounded && isBroadEscapedAtom(source[i + 1])) {
+          pendingNegatedClassBoundary = null;
+          countBeforePendingNegatedClass = broadUnboundedCount;
+          if (countBroad()) return true;
+        } else if (isRequiredLiteralAtom(consumed)) {
+          consumeRequiredLiteralBoundary(readRequiredLiteral(source.slice(i, atomEnd)));
+        }
+        i = consumed ? consumed.end : atomEnd;
+        continue;
+      }
+      if (c === "[") {
+        const closeIdx = findCharClassClose(source, i);
+        if (closeIdx === -1) return true;
+        const atomEnd = closeIdx + 1;
+        const consumed = consumeQuantifier(source, atomEnd);
+        if (consumed === INVALID_QUANTIFIER) return true;
+        const characterClass = source.slice(i, atomEnd);
+        if (consumed && consumed.unbounded && isBroadCharacterClass(characterClass)) {
+          countBeforePendingNegatedClass = broadUnboundedCount;
+          pendingNegatedClassBoundary = characterClass.startsWith("[^") ? characterClass : null;
+          if (countBroad()) return true;
+        } else if (isRequiredLiteralAtom(consumed)) {
+          consumeRequiredLiteralBoundary(null);
+        }
+        i = consumed ? consumed.end : atomEnd;
+        continue;
+      }
+      if (c === ".") {
+        const atomEnd = i + 1;
+        const consumed = consumeQuantifier(source, atomEnd);
+        if (consumed === INVALID_QUANTIFIER) return true;
+        if (consumed && consumed.unbounded) {
+          pendingNegatedClassBoundary = null;
+          countBeforePendingNegatedClass = broadUnboundedCount;
+          if (countBroad()) return true;
+        } else if (isRequiredLiteralAtom(consumed)) {
+          consumeRequiredLiteralBoundary(".");
+        }
+        i = consumed ? consumed.end : atomEnd;
+        continue;
+      }
+      if (c === "(" || c === ")" || c === "|" || c === "^" || c === "$") { i += 1; continue; }
+      const atomEnd = i + 1;
+      const consumed = consumeQuantifier(source, atomEnd);
+      if (consumed === INVALID_QUANTIFIER) return true;
+      if (isRequiredLiteralAtom(consumed)) consumeRequiredLiteralBoundary(c);
+      i = consumed ? consumed.end : atomEnd;
+    }
+    return false;
+  }
+
+  function readRequiredLiteral(atom) {
+    if (atom.length === 1) return atom;
+    if (/^\\[\\^$.*+?()[\]{}|/-]$/.test(atom)) return atom[1] || null;
+    return null;
+  }
+
+  function characterClassMatchesLiteral(characterClass, literal) {
+    try { return new RegExp(`^(?:${characterClass})$`).test(literal); } catch { return true; }
+  }
+
+  const isRequiredLiteralAtom = (consumed) => consumed === null || consumed.required;
+  const isBroadEscapedAtom = (atom) => atom === "s" || atom === "S" || atom === "w" || atom === "W" || atom === "d" || atom === "D";
+
+  function isBroadCharacterClass(source) {
+    const body = source.slice(1, -1);
+    if (!body) return false;
+    if (body.startsWith("^")) return true;
+    return /\\[sSwWdD]/.test(body);
+  }
+
+  // ── toggles → preset variables ──
+  const RESERVED_NAMES = new Set(["user", "char", "character", "characters", "group", "persona", "description", "personality",
+    "scenario", "backstory", "appearance", "example", "input", "model", "chatid", "date", "time", "weekday", "random", "roll",
+    "speaker", "else", "if", "var", "decision"]);
+
+  function validateVariable(spec, parsed, existing) {
+    if (!/^[A-Za-z_]\w*$/.test(spec.varName)) return "변수 이름은 영문, 숫자, _만 쓸 수 있고 숫자로 시작할 수 없습니다.";
+    if (spec.varName.length === 21) return "길이가 정확히 21자인 이름은 마리나라가 캐릭터 ID로 써서 쓸 수 없습니다.";
+    if (RESERVED_NAMES.has(spec.varName.toLowerCase())) return `'${spec.varName}'은(는) 마리나라 기본 매크로 이름이라 쓸 수 없습니다.`;
+    if (existing.some((v) => v.varName.toLowerCase() === spec.varName.toLowerCase())) return "같은 이름의 변수가 이미 있습니다.";
+    if (!spec.sectionIds.length) return "토글을 하나 이상 고르십시오.";
+    const used = new Set(existing.flatMap((v) => v.sectionIds));
+    if (spec.sectionIds.some((id) => used.has(id))) return "이미 다른 변수에 묶인 토글이 있습니다.";
+    const byId = new Map(parsed.sections.map((s) => [s.id, s]));
+    if (spec.sectionIds.some((id) => !byId.get(id) || byId.get(id).isMarker)) return "마커는 묶을 수 없습니다.";
+    return null;
+  }
+
+  function uniqueLabels(names) {
+    const seen = new Map();
+    return names.map((name) => {
+      const base = (name || "").trim() || "옵션";
+      const n = (seen.get(base) || 0) + 1;
+      seen.set(base, n);
+      return n === 1 ? base : base + " (" + n + ")";
+    });
+  }
+
+  function buildPreset(parsed, variables, opts) {
+    const report = makeReport();
+    // Sections the user removed are left out of the output, along with warnings that only concern them.
+    const excluded = new Set(opts.excludeIds || []);
+    const keptNames = new Set(parsed.sections.filter((s) => !excluded.has(s.id)).map((s) => s.name));
+    for (const w of parsed.report.list()) {
+      const where = w.where.filter((n) => keptNames.has(n) || n.startsWith("정규식: "));
+      if (w.where.length && !where.length) continue;
+      for (const n of (where.length ? where : [""])) report.add(w.kind, w.message, n);
+    }
+    const presetId = newId();
+    let sections = parsed.sections.filter((s) => !excluded.has(s.id)).map((s) => ({ ...s }));
+    const byId = new Map(sections.map((s) => [s.id, s]));
+    const choiceBlocks = [];
+    const defaultChoices = {};
+    const removed = new Set();
+    const usedVarNames = collectVarNames(sections);
+
+    for (const v of variables) {
+      const picked = v.sectionIds.map((id) => byId.get(id));
+      const labels = uniqueLabels(picked.map((s, i) => (v.labels && v.labels[i]) || s.name));
+      const isBool = picked.length === 1;
+      const multi = !isBool && (v.pick === "multi" || v.pick === "random");
+      const random = !isBool && v.pick === "random";
+      const addNone = !isBool && v.pick === "single" && v.addNone;
+      // Default selection: explicit ids from the editor, else whatever was enabled in ST.
+      const customDefaults = Array.isArray(v.defaultIds);
+      const enabledIdx = picked
+        .map((s, i) => ((customDefaults ? v.defaultIds.includes(s.id) : s.enabled) ? i : -1))
+        .filter((i) => i >= 0);
+      if (usedVarNames.has(v.varName.toLowerCase())) {
+        report.add("manual", `변수 이름 '${v.varName}'이(가) 프리셋 안의 setvar/getvar 변수 이름과 겹칩니다. 마리나라에서는 프리셋 변수가 우선이라 원래 변수를 가립니다.`, v.varName);
+      }
+      if (!customDefaults && v.pick === "single" && !isBool && enabledIdx.length > 1) {
+        report.add("info", `'${v.varName}': 원래 켜져 있던 토글이 여러 개라서 첫 번째만 기본값으로 골랐습니다.`, v.varName);
+      }
+
+      let values;
+      if (v.mode === "A") values = picked.map((s) => s.content);
+      else if (isBool) values = ["on"];
+      else if (multi) values = labels.map((l) => "[" + l + "]");
+      else values = labels.slice();
+
+      if (v.mode === "A" && new Set(values).size !== values.length) {
+        report.add("manual", `'${v.varName}': 내용이 똑같은 토글이 있어서 선택이 헷갈릴 수 있습니다. B 방식을 쓰거나 내용을 다르게 하십시오.`, v.varName);
+      }
+      if (v.mode === "A") {
+        const sig = (s) => [s.role, s.injectionPosition, s.injectionDepth, s.groupId].join("|");
+        if (new Set(picked.map(sig)).size > 1) {
+          report.add("manual", `'${v.varName}': 고른 토글들의 역할·위치·깊이·그룹이 서로 다릅니다. A 방식은 첫 번째 토글 자리에 모두 모으므로, 원래 위치가 중요하면 B 방식을 쓰십시오.`, v.varName);
+        }
+      }
+
+      const options = picked.map((s, i) => ({ id: "opt_" + newId(), label: labels[i], value: values[i] }));
+      if (addNone) options.push({ id: "opt_" + newId(), label: "없음", value: "" });
+
+      choiceBlocks.push({
+        id: newId(), presetId, variableName: v.varName, question: v.question || v.varName, options,
+        multiSelect: multi, separator: multi ? (v.mode === "A" ? v.separator : ", ") : ", ",
+        randomPick: random, displayMode: "auto", optionSort: "manual",
+      });
+
+      if (isBool) defaultChoices[v.varName] = picked[0].enabled ? values[0] : "";
+      else if (multi) {
+        let def = enabledIdx.map((i) => values[i]);
+        if (random && !def.length && !customDefaults) def = values.slice();
+        defaultChoices[v.varName] = def;
+      } else {
+        defaultChoices[v.varName] = enabledIdx.length ? values[enabledIdx[0]] : (addNone ? "" : values[0]);
+      }
+
+      if (v.mode === "A") {
+        const first = picked[0];
+        const merged = {
+          ...first, id: newId(), identifier: "stme_" + v.varName, name: (v.sectionName || "").trim() || v.varName,
+          originalContent: "", content: "{{" + v.varName + "}}", enabled: true, isMarker: false, markerConfig: null,
+        };
+        sections = sections.map((s) => (s.id === first.id ? merged : s));
+        picked.slice(1).forEach((s) => removed.add(s.id));
+      } else {
+        picked.forEach((s, i) => {
+          let cond;
+          if (isBool) cond = "var:" + v.varName;
+          else if (multi) cond = "var:" + v.varName + " contains " + quote(values[i]);
+          else cond = "var:" + v.varName + " == " + quote(values[i]);
+          const target = sections.find((x) => x.id === s.id);
+          target.content = "{{#if " + cond + "}}\n" + s.content + "\n{{/if}}";
+          target.enabled = true;
+        });
+      }
+    }
+    sections = sections.filter((s) => !removed.has(s.id));
+
+    const now = new Date().toISOString();
+    const outSections = sections.map((s) => ({
+      id: s.id, presetId, identifier: s.identifier, name: s.name, content: s.content, role: s.role,
+      enabled: s.enabled, isMarker: s.isMarker, groupId: s.groupId, markerConfig: s.markerConfig,
+      injectionPosition: s.injectionPosition, injectionDepth: s.injectionDepth, injectionOrder: s.injectionOrder,
+      forbidOverrides: s.forbidOverrides, skipWrap: false,
+    }));
+    const usedGroups = new Set(outSections.map((s) => s.groupId));
+    const outGroups = parsed.groups.filter((g) => usedGroups.has(g.id));
+    const envelope = {
+      type: "marinara_preset",
+      version: 1,
+      exportedAt: now,
+      data: {
+        preset: {
+          id: presetId, name: opts.name || parsed.name, description: "Converted from SillyTavern",
+          conversationPrompt: "", gamePrompt: "",
+          sectionOrder: outSections.map((s) => s.id), groupOrder: outGroups.map((g) => g.id),
+          variableGroups: [], variableValues: {}, wrapFormat: "none", defaultChoices, author: "",
+          createdAt: now, updatedAt: now,
+        },
+        sections: outSections,
+        groups: outGroups.map((g) => ({ ...g, presetId, createdAt: now })),
+        choiceBlocks,
+      },
+    };
+    return { envelope, report: report.list(), sections: outSections };
+  }
+
+  function collectVarNames(sections) {
+    const names = new Set();
+    const re = /\{\{\s*(?:getvar|setvar|addvar|addnumvar|incvar|decvar)\s*::\s*([\w.-]+)/gi;
+    const re2 = /var:([\w.-]+)/g;
+    for (const s of sections) {
+      let m;
+      while ((m = re.exec(s.content))) names.add(m[1].toLowerCase());
+      while ((m = re2.exec(s.content))) names.add(m[1].toLowerCase());
+    }
+    return names;
+  }
+
+  // Shared leading words of toggle names ("문체: 건조", "문체: 서정" → "문체" + ["건조", "서정"]).
+  function splitCommonPrefix(names) {
+    const empty = { prefix: "", rest: names.slice() };
+    if (names.length < 2) return empty;
+    let p = names[0];
+    for (const n of names) while (p && !n.startsWith(p)) p = p.slice(0, -1);
+    // Cut back to the last separator so we never split a word in half.
+    const SEP = /[\s:：|｜\-–—_/\]】)）>·.]/u;
+    let cut = p.length;
+    while (cut > 0 && !SEP.test(p[cut - 1])) cut--;
+    const raw = p.slice(0, cut);
+    const prefix = raw.replace(/[\s:：|｜\-–—_/>·.]+$/u, "").replace(/^[\s\[【(（<]+/u, "").trim();
+    const rest = names.map((n) => n.slice(cut).trim());
+    if (!/[\p{L}\p{N}]/u.test(prefix) || rest.some((r) => !r)) return empty;
+    return { prefix: prefix.replace(/[\]】)）]$/u, "").trim() || prefix, rest };
+  }
+
+  root.STME = { lex, parseHead, makeConverter, makeReport, parseST, buildPreset, validateVariable, splitCommonPrefix, isPatternSafe, newId };
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const encSep = (s) => s.replace(/\n/g, "\\n").replace(/\t/g, "\\t");
+  const decSep = (s) => s.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+
+  let parsed = null;
+  let variables = [];
+  let editing = null;          // index into variables while editing one
+  let selected = new Set();
+  let rxSel = new Set();       // indices of preset regexes to export
+  let removed = new Set();     // sections left out of the converted preset
+  let lastClicked = null;
+  let query = "";
+  let ed = freshEditor();
+
+  function freshEditor() {
+    return {
+      varName: "", question: "", sectionName: "", mode: "A", pick: "single", addNone: true, separator: "\n\n",
+      order: [], labels: {}, defaults: new Set(), noneDefault: false,
+      touched: { question: false, sectionName: false, labels: new Set() }, preview: new Set(), error: "",
+    };
+  }
+  const byId = () => new Map(parsed.sections.map((s) => [s.id, s]));
+
+  // ── loading ──
+  const drop = $("drop"), file = $("file");
+  $("openBtn").addEventListener("click", () => file.click());
+  drop.addEventListener("click", () => file.click());
+  for (const el of [drop, document.body]) {
+    el.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+    el.addEventListener("dragleave", () => drop.classList.remove("over"));
+    el.addEventListener("drop", (e) => {
+      e.preventDefault(); e.stopPropagation(); drop.classList.remove("over");
+      if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]);
+    });
+  }
+  file.addEventListener("change", () => { if (file.files[0]) load(file.files[0]); file.value = ""; });
+
+  let source = null; // { text, name } of the loaded ST file, kept for autosave
+
+  async function load(f) {
+    const err = $("loadError");
+    err.classList.add("hidden");
+    try {
+      const text = await f.text();
+      const next = STME.parseST(JSON.parse(text), f.name);
+      if (variables.length && !confirm("다른 파일을 열면 지금 만든 변수가 사라집니다. 계속할까요?")) return;
+      source = { text, name: f.name };
+      parsed = next;
+      variables = []; editing = null; selected = new Set(); removed = new Set(); lastClicked = null; query = ""; ed = freshEditor();
+      rxSel = allRegexIdx();
+      $("rxPatch").checked = true;
+      $("search").value = ""; $("filter").value = "all";
+      $("presetName").value = parsed.name;
+      showWorkspace();
+      showTab("vars");
+      renderAll();
+    } catch (e) {
+      drop.classList.remove("hidden");
+      err.textContent = "불러오지 못했습니다: " + e.message;
+      err.classList.remove("hidden");
+    }
+  }
+
+  function showWorkspace() {
+    drop.classList.add("hidden");
+    ["presetName", "download", "tabs", "resetBtn"].forEach((id) => $(id).classList.remove("hidden"));
+  }
+
+  // ── autosave (IndexedDB: presets can be bigger than localStorage allows) ──
+  // Section ids are regenerated on every parse, so saved state refers to sections by list position.
+  const DB_NAME = "stme-converter", STORE = "state", KEY = "current";
+  function idb(mode, fn) {
+    return new Promise((resolve, reject) => {
+      const open = indexedDB.open(DB_NAME, 1);
+      open.onupgradeneeded = () => open.result.createObjectStore(STORE);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const tx = open.result.transaction(STORE, mode);
+        const req = fn(tx.objectStore(STORE));
+        tx.oncomplete = () => { open.result.close(); resolve(req && req.result); };
+        tx.onerror = () => { open.result.close(); reject(tx.error); };
+      };
+    });
+  }
+  function snapshot() {
+    const idx = new Map(parsed.sections.map((s, i) => [s.id, i]));
+    const ix = (ids) => ids.map((id) => idx.get(id));
+    const keyed = (obj) => Object.fromEntries(Object.entries(obj).map(([id, v]) => [idx.get(id), v]));
+    return {
+      v: 2, source, presetName: $("presetName").value, editing,
+      selected: ix([...selected]), removed: ix([...removed]), rxSel: [...rxSel], rxPatch: $("rxPatch").checked,
+      variables: variables.map((v) => ({ ...v, sectionIds: ix(v.sectionIds), defaultIds: ix(v.defaultIds),
+        _ed: { ...v._ed, labels: keyed(v._ed.labels) } })),
+      ed: { ...ed, order: ix(ed.order), labels: keyed(ed.labels), defaults: ix([...ed.defaults]), preview: [], error: "",
+        touched: { ...ed.touched, labels: ix([...ed.touched.labels]) } },
+    };
+  }
+  function restore(s) {
+    const raw = JSON.parse(s.source.text);
+    parsed = STME.parseST(raw, s.source.name);
+    source = s.source;
+    let id = (i) => parsed.sections[i] && parsed.sections[i].id;
+    if (s.v === 1) {
+      // Saved by the previous version: its indices point into the old section list, so map them by identifier.
+      // Sections that no longer exist (dropped leftovers) simply fall away.
+      const old = STME.parseST(raw, s.source.name, { legacy: true });
+      const byIdent = new Map();
+      parsed.sections.forEach((x) => { if (!byIdent.has(x.identifier)) byIdent.set(x.identifier, x.id); });
+      id = (i) => old.sections[i] && byIdent.get(old.sections[i].identifier);
+    }
+    const ids = (arr) => arr.map(id).filter(Boolean);
+    const keyed = (obj) => Object.fromEntries(Object.entries(obj).map(([i, v]) => [id(Number(i)), v]).filter(([k]) => k));
+    const restored = s.variables.map((v) => ({ ...v, sectionIds: ids(v.sectionIds), defaultIds: ids(v.defaultIds),
+      _ed: { ...v._ed, labels: keyed(v._ed.labels) } }));
+    variables = restored.filter((v) => v.sectionIds.length);
+    editing = s.editing !== null && restored[s.editing] && restored[s.editing].sectionIds.length ? variables.indexOf(restored[s.editing]) : null;
+    selected = new Set(ids(s.selected));
+    $("rxPatch").checked = s.rxPatch !== false;
+    rxSel = Array.isArray(s.rxSel) ? new Set(s.rxSel.filter((i) => i < parsed.regexScripts.length)) : allRegexIdx();
+    removed = new Set(ids(s.removed || []));
+    ed = { ...s.ed, order: ids(s.ed.order), labels: keyed(s.ed.labels), defaults: new Set(ids(s.ed.defaults)), preview: new Set(),
+      touched: { ...s.ed.touched, labels: new Set(ids(s.ed.touched.labels)) } };
+    $("presetName").value = s.presetName;
+    showWorkspace();
+    showTab("vars");
+    renderAll();
+  }
+  let saveTimer = null;
+  function scheduleSave() {
+    if (!parsed) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const snap = snapshot();
+      idb("readwrite", (st) => st.put(snap, KEY)).catch((e) => console.warn("autosave failed", e));
+    }, 300);
+  }
+  idb("readonly", (st) => st.get(KEY))
+    .then((s) => { if (s && (s.v === 1 || s.v === 2) && s.source && !parsed) restore(s); })
+    .catch((e) => console.warn("restore failed", e));
+
+  $("resetBtn").addEventListener("click", () => {
+    if (!confirm("지금 작업을 지우고 새로 시작할까요? 저장된 작업도 함께 지워집니다.")) return;
+    clearTimeout(saveTimer);
+    idb("readwrite", (st) => st.delete(KEY)).finally(() => location.reload());
+  });
+  // Typing in fields doesn't re-render, so save on any input too.
+  document.addEventListener("input", scheduleSave);
+  document.addEventListener("change", scheduleSave);
+  document.addEventListener("click", scheduleSave);
+
+  // ── tabs ──
+  function showTab(name) {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("on", t.dataset.tab === name));
+    ["vars", "macro"].forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== name));
+    if (name === "macro") renderMacro();
+  }
+  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+
+  // ── toggle list ──
+  function usedBy(id) {
+    const i = variables.findIndex((v) => v.sectionIds.includes(id));
+    return i < 0 ? null : i;
+  }
+  function selectable(s) {
+    if (s.isMarker || removed.has(s.id)) return false;
+    const u = usedBy(s.id);
+    return u === null || u === editing;
+  }
+  function visibleSections() {
+    const f = $("filter").value;
+    const q = query.toLowerCase();
+    return parsed.sections.filter((s) => {
+      if (q && !(s.name || "").toLowerCase().includes(q)) return false;
+      if (f === "removed") return removed.has(s.id);
+      if (f === "free") return selectable(s);
+      if (f === "on") return s.enabled;
+      if (f === "off") return !s.enabled;
+      return true;
+    });
+  }
+
+  function renderList() {
+    const groups = new Map(parsed.groups.map((g) => [g.id, g.name]));
+    const rows = visibleSections();
+    let html = "", lastGroup;
+    for (const s of rows) {
+      if (s.groupId !== lastGroup) {
+        lastGroup = s.groupId;
+        if (s.groupId) {
+          const members = rows.filter((r) => r.groupId === s.groupId && selectable(r));
+          const all = members.length && members.every((r) => selected.has(r.id));
+          html += `<div class="grp" data-group="${s.groupId}"><input type="checkbox" tabindex="-1" ${all ? "checked" : ""} ${members.length ? "" : "disabled"}> ${esc(groups.get(s.groupId) || "그룹")}</div>`;
+        }
+      }
+      const u = usedBy(s.id);
+      const ok = selectable(s);
+      const chips = [
+        `<span class="chip ${s.enabled ? "on" : ""}">${s.enabled ? "켜짐" : "꺼짐"}</span>`,
+        s.isMarker ? `<span class="chip">마커</span>` : !(s.originalContent || "").trim() ? `<span class="chip blank" title="원본 토글 내용이 비어 있습니다">빈 내용</span>` : "",
+        s.role !== "system" ? `<span class="chip">${s.role}</span>` : "",
+        s.injectionPosition === "depth" ? `<span class="chip">깊이 ${s.injectionDepth}</span>` : "",
+        u !== null ? `<span class="chip var">{{${esc(variables[u].varName)}}}</span>` : "",
+      ].join("");
+      const gone = removed.has(s.id);
+      const action = gone
+        ? `<button class="ghost icon" data-restore="${s.id}" title="되살리기">↺</button>`
+        : u === null ? `<button class="ghost icon rowdel" data-remove="${s.id}" title="변환할 때 빼기">✕</button>` : "";
+      html += `<div class="row ${ok ? "" : "off"} ${gone ? "gone" : ""} ${selected.has(s.id) ? "sel" : ""}" data-id="${s.id}">
+        <input type="checkbox" tabindex="-1" ${selected.has(s.id) ? "checked" : ""} ${ok ? "" : "disabled"}>
+        <span class="nm" title="${esc(s.name)}">${esc(s.name || "(이름 없음)")}</span>${gone ? `<span class="chip">삭제됨</span>` : chips}${action}</div>`;
+    }
+    $("list").innerHTML = html || `<div class="empty">맞는 토글이 없습니다</div>`;
+    $("selCount").textContent = [selected.size ? `${selected.size}개 선택` : "", removed.size ? `삭제 ${removed.size}개` : ""].filter(Boolean).join(" · ");
+    $("selRemove").classList.toggle("hidden", !selected.size);
+    updateFab();
+  }
+
+  function removeSections(ids) {
+    ids.forEach((id) => { removed.add(id); selected.delete(id); });
+    selectionChanged();
+    renderVars(); updateBadge(); scheduleSave();
+  }
+
+  $("list").addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (btn && btn.dataset.remove) return removeSections([btn.dataset.remove]);
+    if (btn && btn.dataset.restore) { removed.delete(btn.dataset.restore); renderList(); updateBadge(); return scheduleSave(); }
+    const grp = e.target.closest(".grp");
+    if (grp) {
+      const members = visibleSections().filter((s) => s.groupId === grp.dataset.group && selectable(s));
+      const all = members.every((s) => selected.has(s.id));
+      members.forEach((s) => (all ? selected.delete(s.id) : selected.add(s.id)));
+      return selectionChanged();
+    }
+    const row = e.target.closest(".row");
+    if (!row || row.classList.contains("off")) return;
+    if (suppressClick) { suppressClick = false; return; }
+    const id = row.dataset.id;
+    pick(id, !selected.has(id), e.shiftKey);
+  });
+  $("list").addEventListener("mousedown", (e) => { if (e.shiftKey) e.preventDefault(); });
+
+  // Select one row, or every selectable row between the last clicked one and this one.
+  function pick(id, target, range) {
+    const vis = visibleSections().filter(selectable).map((s) => s.id);
+    if (range && lastClicked && vis.includes(lastClicked)) {
+      const [a, b] = [vis.indexOf(lastClicked), vis.indexOf(id)].sort((x, y) => x - y);
+      vis.slice(a, b + 1).forEach((x) => (target ? selected.add(x) : selected.delete(x)));
+    } else {
+      target ? selected.add(id) : selected.delete(id);
+    }
+    lastClicked = id;
+    selectionChanged();
+  }
+
+  // Touch: long-press a row to select the range from the last tapped row (Shift+click stand-in).
+  let pressTimer = null, pressStart = null, suppressClick = false;
+  $("list").addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse") return;
+    suppressClick = false;
+    const row = e.target.closest(".row");
+    if (!row || row.classList.contains("off") || e.target.closest("button")) return;
+    pressStart = { x: e.clientX, y: e.clientY };
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      suppressClick = true;
+      if (navigator.vibrate) navigator.vibrate(15);
+      pick(row.dataset.id, true, true);
+    }, 450);
+  });
+  const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+  $("list").addEventListener("pointermove", (e) => {
+    if (pressTimer && pressStart && Math.hypot(e.clientX - pressStart.x, e.clientY - pressStart.y) > 10) cancelPress();
+  });
+  ["pointerup", "pointercancel", "scroll"].forEach((ev) => $("list").addEventListener(ev, cancelPress));
+  $("list").addEventListener("contextmenu", (e) => { if (e.target.closest(".row")) e.preventDefault(); });
+
+  $("selRemove").addEventListener("click", () => removeSections([...selected]));
+
+  // Phones: the source toggle list is a bottom sheet opened from a floating button.
+  const narrow = matchMedia("(max-width: 820px)");
+  const listOpen = () => document.body.classList.contains("list-open");
+  function updateFab() {
+    const n = selected.size;
+    $("listFab").textContent = n ? `원본 토글 고르기 · ${n}개 선택` : "원본 토글 고르기";
+    $("sheetCount").textContent = n ? `${n}개 선택` : "";
+  }
+  function openList() {
+    if (!narrow.matches || listOpen()) return;
+    document.body.classList.add("list-open");
+    history.pushState({ stmeList: 1 }, ""); // so the phone's back button closes the sheet
+  }
+  function hideList() { document.body.classList.remove("list-open"); }
+  function closeList() {
+    if (!listOpen()) return;
+    if (history.state && history.state.stmeList) history.back(); else hideList();
+  }
+  addEventListener("popstate", hideList);
+  $("listFab").addEventListener("click", openList);
+  $("listDone").addEventListener("click", closeList);
+  $("backdrop").addEventListener("click", closeList);
+  $("selAll").addEventListener("click", () => { visibleSections().filter(selectable).forEach((s) => selected.add(s.id)); selectionChanged(); });
+  $("selNone").addEventListener("click", () => { selected.clear(); selectionChanged(); });
+  $("selInvert").addEventListener("click", () => {
+    visibleSections().filter(selectable).forEach((s) => (selected.has(s.id) ? selected.delete(s.id) : selected.add(s.id)));
+    selectionChanged();
+  });
+  $("search").addEventListener("keydown", (e) => { if (e.key === "Enter") { query = $("search").value.trim(); renderList(); } });
+  $("filter").addEventListener("change", renderList);
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !parsed || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    selected.clear(); selectionChanged();
+  });
+
+  // ── editor ──
+  function selectionChanged() {
+    syncEditor();
+    renderList();
+    renderEditor();
+    scheduleSave();
+  }
+
+  function syncEditor() {
+    const map = byId();
+    const index = new Map(parsed.sections.map((s, i) => [s.id, i]));
+    const kept = ed.order.filter((id) => selected.has(id));
+    const added = [...selected].filter((id) => !kept.includes(id)).sort((a, b) => index.get(a) - index.get(b));
+    ed.order = kept.concat(added);
+    for (const id of [...ed.defaults]) if (!selected.has(id)) ed.defaults.delete(id);
+    for (const id of added) {
+      if (!map.get(id).enabled) continue;
+      if (ed.pick === "single" && ed.order.length > 1 && (ed.defaults.size || ed.noneDefault)) continue;
+      ed.defaults.add(id);
+    }
+    // Auto-fill names from the shared prefix of the picked toggle names, without overwriting user edits.
+    const names = ed.order.map((id) => map.get(id).name || "");
+    const { prefix, rest } = STME.splitCommonPrefix(names);
+    const fallback = ed.order.length === 1 ? names[0] : "";
+    if (!ed.touched.question) ed.question = prefix || fallback;
+    if (!ed.touched.sectionName) ed.sectionName = prefix || fallback;
+    ed.order.forEach((id, i) => { if (!ed.touched.labels.has(id)) ed.labels[id] = rest[i] || names[i]; });
+  }
+
+  function renderEditor() {
+    const box = $("editor");
+    if (!ed.order.length) {
+      box.innerHTML = `<div class="empty">${editing !== null ? `옵션으로 쓸 토글을 <span class="only-wide">왼쪽에서</span><span class="only-narrow">아래 버튼으로</span> 고르십시오` : `<span class="only-wide">왼쪽에서</span><span class="only-narrow">아래 '원본 토글 고르기'에서</span> 묶을 토글을 고르면<br>여기서 프리셋 변수로 만들 수 있습니다`}</div>`;
+      if (editing !== null) box.innerHTML += `<div class="ed-foot" style="padding:0 14px 14px"><button data-act="cancel">편집 취소</button></div>`;
+      return;
+    }
+    const map = byId();
+    const isBool = ed.order.length === 1;
+    const multi = !isBool && ed.pick !== "single";
+    const seg = (key, items) => `<div class="seg">${items.map(([v, l, t]) => `<button data-seg="${key}" data-val="${v}" class="${ed[key] === v ? "on" : ""}" title="${esc(t || "")}">${l}</button>`).join("")}</div>`;
+    const optRows = ed.order.map((id, i) => {
+      const s = map.get(id);
+      const def = isBool || multi
+        ? `<input type="checkbox" data-def="${id}" ${ed.defaults.has(id) ? "checked" : ""} title="기본으로 선택">`
+        : `<input type="radio" name="def" data-def="${id}" ${!ed.noneDefault && ed.defaults.has(id) ? "checked" : ""} title="기본값">`;
+      return `<div class="opt">${def}
+        <input type="text" data-label="${id}" value="${esc(ed.labels[id])}" aria-label="옵션 이름">
+        <span class="src" title="원래 토글: ${esc(s.name)}">${esc(s.name)}</span>${(s.originalContent || "").trim() ? "" : `<span class="chip blank">빈 내용</span>`}
+        <button class="ghost icon" data-act="preview" data-id="${id}" title="내용 보기">${ed.preview.has(id) ? "▴" : "▾"}</button>
+        <button class="ghost icon" data-act="up" data-i="${i}" title="위로" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="ghost icon" data-act="down" data-i="${i}" title="아래로" ${i === ed.order.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="ghost icon" data-act="remove" data-id="${id}" title="빼기">✕</button>
+      </div>${ed.preview.has(id) ? `<div class="opt-preview"><pre>${esc(s.content || "(비어 있음)")}</pre></div>` : ""}`;
+    }).join("");
+    const noneRow = !isBool && !multi && ed.addNone
+      ? `<div class="opt"><input type="radio" name="def" data-def="__none" ${ed.noneDefault ? "checked" : ""} title="기본값"><span style="flex:1;color:var(--muted)">없음 (아무것도 안 넣기)</span></div>` : "";
+
+    box.innerHTML = `<div class="editor">
+      <div class="ed-title">
+        <b>${editing !== null ? `변수 편집: {{${esc(variables[editing].varName)}}}` : `새 변수 · ${ed.order.length}개`}</b>
+        ${seg("mode", [["A", "내용 옮기기", "토글 내용이 옵션 값이 되고, 첫 번째 토글 자리에 섹션 하나만 남습니다"], ["B", "#if로 감싸기", "섹션은 제자리에 두고 내용을 {{#if}} 조건으로 감쌉니다. 토글 위치·역할이 서로 다를 때 안전합니다"]])}
+      </div>
+      <div class="grid2">
+        <div class="fld"><span>변수 이름 (영문·숫자·_)</span>
+          <div class="affix"><input type="text" data-prefix value="${esc(varPrefix)}" placeholder="앞부분" aria-label="공통 앞부분" title="모든 변수 이름 앞에 붙는 공통 앞부분 (예: a_). 다음에도 기억됩니다"><input type="text" data-field="varName" value="${esc(ed.varName)}" placeholder="style"></div>
+          <div class="hint" data-final>${finalNameHint()}</div></div>
+        <label class="fld"><span>질문 (선택 창에 보임)</span><input type="text" data-field="question" value="${esc(ed.question)}" placeholder="문체를 고르십시오"></label>
+      </div>
+      ${ed.mode === "A" ? `<label class="fld"><span>새 섹션 이름 (프리셋 목록에 보일 이름)</span><input type="text" data-field="sectionName" value="${esc(ed.sectionName)}" placeholder="비우면 변수 이름"></label>` : ""}
+      ${isBool ? `<div class="hint">토글 하나라서 켜기/끄기 스위치가 됩니다.</div>` : `<div class="fld"><span>선택 방식</span>${seg("pick", [["single", "하나만"], ["multi", "여러 개"], ["random", "랜덤 1개", "고른 것 중 하나를 매번 랜덤으로"]])}</div>`}
+      <div class="fld"><span>옵션 · 이름을 고칠 수 있고, 왼쪽 ${isBool || multi ? "체크" : "동그라미"}가 기본값입니다</span>
+        <div class="opts">${optRows}${noneRow}</div></div>
+      <div class="toolbar">
+        ${!isBool && !multi ? `<label class="hint" style="display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" data-field="addNone" ${ed.addNone ? "checked" : ""}> '없음' 옵션</label>` : ""}
+        ${ed.mode === "A" && multi && ed.pick === "multi" ? `<label class="fld" style="display:flex;gap:6px;align-items:center;margin-left:auto"><span style="margin:0">구분자</span><input type="text" data-field="separator" value="${esc(encSep(ed.separator))}" style="width:90px" title="옵션 사이에 들어갈 글자 (\\n = 줄바꿈)"></label>` : ""}
+      </div>
+      <div class="ed-foot">
+        <span class="err ${ed.error ? "" : "hidden"}">${esc(ed.error)}</span>
+        <button data-act="cancel">${editing !== null ? "편집 취소" : "선택 해제"}</button>
+        <button class="primary" data-act="save">${editing !== null ? "저장" : "변수 만들기"}</button>
+      </div>
+    </div>`;
+  }
+
+  // Shared variable-name prefix (e.g. "a_"): remembered per browser, applied to every new variable.
+  const PREFIX_KEY = "stme-var-prefix";
+  let varPrefix = "";
+  try { varPrefix = localStorage.getItem(PREFIX_KEY) || ""; } catch {}
+  function fullVarName() {
+    const base = ed.varName.trim();
+    return base && varPrefix && !base.startsWith(varPrefix) ? varPrefix + base : base;
+  }
+  function finalNameHint() {
+    return varPrefix && ed.varName.trim() ? `최종 이름: <code>{{${esc(fullVarName())}}}</code>` : "";
+  }
+
+  // Text inputs update state without re-rendering so typing keeps focus.
+  $("editor").addEventListener("input", (e) => {
+    const t = e.target;
+    if (t.dataset.field && t.type === "text") {
+      const f = t.dataset.field;
+      ed[f] = f === "separator" ? decSep(t.value) : t.value;
+      if (f === "question" || f === "sectionName") ed.touched[f] = true;
+    }
+    if (t.dataset.label) { ed.labels[t.dataset.label] = t.value; ed.touched.labels.add(t.dataset.label); }
+    if (t.dataset.prefix !== undefined) {
+      varPrefix = t.value.trim();
+      try { localStorage.setItem(PREFIX_KEY, varPrefix); } catch {}
+    }
+    if (t.dataset.prefix !== undefined || t.dataset.field === "varName") {
+      const hint = $("editor").querySelector("[data-final]");
+      if (hint) hint.innerHTML = finalNameHint();
+    }
+    if (ed.error) { ed.error = ""; const er = $("editor").querySelector(".err"); if (er) er.classList.add("hidden"); }
+  });
+  $("editor").addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.dataset.field === "addNone") { ed.addNone = t.checked; if (!t.checked) ed.noneDefault = false; return renderEditor(); }
+    if (t.dataset.def) {
+      const id = t.dataset.def;
+      if (t.type === "radio") {
+        ed.defaults.clear();
+        ed.noneDefault = id === "__none";
+        if (!ed.noneDefault) ed.defaults.add(id);
+      } else t.checked ? ed.defaults.add(id) : ed.defaults.delete(id);
+    }
+  });
+  $("editor").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.seg) {
+      const prevPick = ed.pick;
+      ed[b.dataset.seg] = b.dataset.val;
+      // Leaving "하나만": pre-check every toggle that was on in ST.
+      if (b.dataset.seg === "pick" && prevPick === "single" && b.dataset.val !== "single") {
+        const map = byId();
+        ed.defaults = new Set(ed.order.filter((id) => map.get(id).enabled));
+        ed.noneDefault = false;
+      }
+      if (b.dataset.seg === "pick" && b.dataset.val === "single" && ed.defaults.size > 1) {
+        const first = ed.order.find((id) => ed.defaults.has(id));
+        ed.defaults = new Set([first]);
+      }
+      return renderEditor();
+    }
+    const act = b.dataset.act;
+    if (act === "preview") { const id = b.dataset.id; ed.preview.has(id) ? ed.preview.delete(id) : ed.preview.add(id); return renderEditor(); }
+    if (act === "up" || act === "down") {
+      const i = Number(b.dataset.i), j = act === "up" ? i - 1 : i + 1;
+      [ed.order[i], ed.order[j]] = [ed.order[j], ed.order[i]];
+      return renderEditor();
+    }
+    if (act === "remove") { selected.delete(b.dataset.id); return selectionChanged(); }
+    if (act === "cancel") return resetEditor();
+    if (act === "save") return save();
+  });
+
+  function save() {
+    const isBool = ed.order.length === 1;
+    const spec = {
+      varName: fullVarName(), question: ed.question.trim(), sectionName: ed.sectionName.trim(),
+      mode: ed.mode, pick: isBool ? "single" : ed.pick, addNone: ed.addNone, separator: ed.separator,
+      sectionIds: ed.order.slice(), labels: ed.order.map((id) => (ed.labels[id] || "").trim()),
+      defaultIds: ed.noneDefault ? [] : ed.order.filter((id) => ed.defaults.has(id)),
+      // kept so the editor can be reopened exactly as it was
+      _ed: { touched: { question: ed.touched.question, sectionName: ed.touched.sectionName }, labels: { ...ed.labels }, noneDefault: ed.noneDefault },
+    };
+    const others = variables.filter((_, i) => i !== editing);
+    const error = STME.validateVariable(spec, parsed, others);
+    if (error) { ed.error = error; return renderEditor(); }
+    if (editing !== null) variables[editing] = spec; else variables.push(spec);
+    resetEditor();
+  }
+
+  function resetEditor() {
+    editing = null; ed = freshEditor(); selected = new Set(); lastClicked = null;
+    renderAll();
+    if (narrow.matches) scrollTo(0, 0);
+  }
+
+  function startEdit(i) {
+    const v = variables[i];
+    editing = i;
+    ed = freshEditor();
+    const base = varPrefix && v.varName.startsWith(varPrefix) && v.varName.length > varPrefix.length ? v.varName.slice(varPrefix.length) : v.varName;
+    Object.assign(ed, { varName: base, question: v.question, sectionName: v.sectionName || "", mode: v.mode, pick: v.pick,
+      addNone: v.addNone, separator: v.separator, order: v.sectionIds.slice(), labels: { ...v._ed.labels },
+      defaults: new Set(v.defaultIds), noneDefault: v._ed.noneDefault });
+    ed.touched = { question: true, sectionName: true, labels: new Set(v.sectionIds) };
+    selected = new Set(v.sectionIds);
+    renderAll();
+    if (narrow.matches) scrollTo(0, 0);
+  }
+
+  function renderVars() {
+    const map = byId();
+    const pickLabel = { single: "하나만", multi: "여러 개", random: "랜덤 1개" };
+    $("varsPane").classList.toggle("hidden", !variables.length);
+    $("vars").innerHTML = variables.length ? `<div class="vars-head">만든 변수 ${variables.length}개</div>` + variables.map((v, i) => `
+      <div class="var ${editing === i ? "editing" : ""}">
+        <span class="chip var">{{${esc(v.varName)}}}</span>
+        <div class="info">
+          <div>${esc(v.question || v.varName)}</div>
+          <div class="sub">${v.mode === "A" ? "내용 옮기기" : "#if 감싸기"} · ${v.sectionIds.length === 1 ? "켜기/끄기" : pickLabel[v.pick]} · ${v.sectionIds.map((id, k) => esc(v.labels[k] || map.get(id).name)).join(", ")}</div>
+        </div>
+        <button class="ghost" data-edit="${i}">편집</button>
+        <button class="ghost" data-del="${i}">삭제</button>
+      </div>`).join("") : "";
+  }
+  $("vars").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.edit !== undefined) return startEdit(Number(b.dataset.edit));
+    if (b.dataset.del !== undefined) {
+      const i = Number(b.dataset.del);
+      if (!confirm(`{{${variables[i].varName}}} 변수를 지울까요?`)) return;
+      variables.splice(i, 1);
+      if (editing === i) return resetEditor();
+      if (editing !== null && editing > i) editing--;
+      renderAll();
+    }
+  });
+
+  // ── macro tab ──
+  function build() {
+    return STME.buildPreset(parsed, variables, { name: $("presetName").value.trim(), excludeIds: [...removed] });
+  }
+  function updateBadge() {
+    const list = build().report;
+    const manual = list.filter((w) => w.kind === "manual").length;
+    const badge = $("warnBadge");
+    badge.textContent = manual ? `확인 ${manual}` : list.length ? String(list.length) : "";
+    badge.className = "badge" + (manual ? " warn" : "");
+    badge.classList.toggle("hidden", !badge.textContent);
+  }
+  let onlyChanged = true;
+  function renderMacro() {
+    const out = build();
+    const orig = new Map(parsed.sections.map((s) => [s.id, s.originalContent]));
+    const changed = out.sections.filter((s) => orig.has(s.id) && !s.isMarker && orig.get(s.id) !== s.content);
+    const kinds = [["manual", "직접 확인이 필요합니다"], ["approx", "비슷하게 바꿨습니다 (동작이 조금 다릅니다)"], ["info", "참고"]];
+    const warnings = kinds.map(([k, title]) => {
+      const items = out.report.filter((w) => w.kind === k);
+      return items.length ? `<div class="wbox ${k}"><h3>${title}</h3><ul>${items.map((w) => `<li>${esc(w.message)}${w.where.length ? ` <span class="where">— ${w.where.map(esc).join(", ")}</span>` : ""}</li>`).join("")}</ul></div>` : "";
+    }).join("");
+    const shown = onlyChanged ? out.sections.filter((s) => changed.includes(s) || !orig.has(s.id)) : out.sections;
+    $("tab-macro").innerHTML = `
+      <div class="stats">
+        <div class="stat"><b>${out.sections.length}</b><span>섹션</span></div>
+        <div class="stat"><b>${changed.length}</b><span>바뀐 섹션</span></div>
+        <div class="stat"><b>${variables.length}</b><span>프리셋 변수</span></div>
+        <div class="stat"><b>${out.envelope.data.groups.length}</b><span>그룹</span></div>
+      </div>
+      ${warnings || `<div class="wbox"><h3>확인할 것이 없습니다</h3></div>`}
+      <div class="toolbar" style="margin:14px 0 8px"><b>섹션 미리보기</b>
+        <label class="hint" style="margin-left:auto;display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" id="onlyChanged" ${onlyChanged ? "checked" : ""}> 바뀐 섹션만</label></div>
+      ${shown.map((s) => {
+        const before = orig.get(s.id);
+        const diff = before !== undefined && before !== s.content;
+        return `<details class="sec"><summary>${esc(s.name || "(이름 없음)")}
+          ${s.isMarker ? `<span class="chip">마커</span>` : ""}${before === undefined ? `<span class="chip var">새 섹션</span>` : ""}${s.enabled ? "" : `<span class="chip">꺼짐</span>`}</summary>
+          <div class="body">${diff ? `<div><div class="lbl">원본</div><pre>${esc(before)}</pre></div><div><div class="lbl">변환 후</div><pre>${esc(s.content)}</pre></div>` : `<div style="grid-column:1/-1"><pre>${esc(s.content || "(비어 있음)")}</pre></div>`}</div>
+        </details>`;
+      }).join("") || `<div class="empty">바뀐 섹션이 없습니다</div>`}`;
+    $("onlyChanged").addEventListener("change", (e) => { onlyChanged = e.target.checked; renderMacro(); });
+  }
+
+  // ── export ──
+  const safeName = () => ($("presetName").value.trim() || parsed.name || "preset").replace(/[\\/:*?"<>|]+/g, "_");
+  function saveBlob(blob, filename) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  $("download").addEventListener("click", () => {
+    const out = build();
+    saveBlob(new Blob([JSON.stringify(out.envelope, null, 2)], { type: "application/json" }), safeName() + ".marinara.json");
+  });
+  $("regexDownload").addEventListener("click", () => {
+    const usePatch = $("rxPatch").checked;
+    const picked = parsed.regexScripts
+      .map((s, i) => {
+        const safety = parsed.regexSafety[i];
+        return usePatch && safety.status === "fixed" ? { ...s, findRegex: safety.patched } : s;
+      })
+      .filter((_, i) => rxSel.has(i));
+    if (!picked.length) return;
+    const data = { kind: "marinara.regex-scripts", version: 1, exportedAt: new Date().toISOString(), regexScripts: picked };
+    saveBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), safeName() + " 정규식.json");
+  });
+
+  // Regex picker: which preset regexes go into the exported file (all by default).
+  const allRegexIdx = () => new Set(parsed.regexScripts.map((_, i) => i));
+  let rxLast = null;
+  function renderRegexBar() {
+    const scripts = parsed.regexScripts, n = scripts.length;
+    $("regexBar").classList.toggle("hidden", !n);
+    $("regexCount").textContent = n;
+    $("regexDownload").textContent = rxSel.size === n ? "정규식 받기" : `정규식 받기 (${rxSel.size}/${n})`;
+    $("regexDownload").disabled = !rxSel.size;
+    $("regexList").innerHTML = scripts.map((s, i) => {
+      const mode = s.markdownOnly && !s.promptOnly ? "표시 전용" : s.promptOnly && !s.markdownOnly ? "프롬프트 전용" : "";
+      return `<div class="row ${rxSel.has(i) ? "sel" : ""}" data-rx="${i}">
+        <input type="checkbox" tabindex="-1" ${rxSel.has(i) ? "checked" : ""}>
+        <span class="nm" title="${esc(s.scriptName)}">${esc(s.scriptName)}</span>
+        ${safetyChip(parsed.regexSafety[i])}
+        ${s.disabled ? `<span class="chip">꺼짐</span>` : `<span class="chip on">켜짐</span>`}${mode ? `<span class="chip">${mode}</span>` : ""}</div>`;
+    }).join("");
+    const fixed = parsed.regexSafety.filter((r) => r.status === "fixed").length;
+    const bad = parsed.regexSafety.filter((r) => r.status === "unfixable").length;
+    $("regexSafetySummary").textContent = [fixed ? `보정 ${fixed}개` : "", bad ? `보정 불가 ${bad}개` : ""].filter(Boolean).join(" · ");
+  }
+  function safetyChip(r) {
+    if (r.status === "ok") return `<span class="chip on" title="마리나라 안전 검사를 그대로 통과합니다">통과</span>`;
+    if (r.status === "unfixable") return `<span class="chip warn" title="${esc(r.reason)} · 마리나라에서 실행되지 않습니다">보정 불가</span>`;
+    return $("rxPatch").checked
+      ? `<span class="chip var" title="끝없는 반복에 상한을 붙여 안전 검사를 통과하게 했습니다">보정됨</span>`
+      : `<span class="chip warn" title="자동 보정이 꺼져 있어서 마리나라에서 실행되지 않습니다">검사 걸림</span>`;
+  }
+  $("rxPatch").addEventListener("change", () => renderRegexBar());
+  $("regexToggle").addEventListener("click", () => {
+    const open = $("regexListWrap").classList.toggle("hidden") === false;
+    $("regexToggle").textContent = open ? "목록 닫기" : "목록 보기";
+  });
+  $("regexList").addEventListener("click", (e) => {
+    const row = e.target.closest(".row");
+    if (!row) return;
+    const i = Number(row.dataset.rx), target = !rxSel.has(i);
+    const [a, b] = e.shiftKey && rxLast !== null ? [Math.min(rxLast, i), Math.max(rxLast, i)] : [i, i];
+    for (let k = a; k <= b; k++) target ? rxSel.add(k) : rxSel.delete(k);
+    rxLast = i;
+    renderRegexBar(); scheduleSave();
+  });
+  $("regexList").addEventListener("mousedown", (e) => { if (e.shiftKey) e.preventDefault(); });
+  $("rxAll").addEventListener("click", () => { rxSel = allRegexIdx(); renderRegexBar(); scheduleSave(); });
+  $("rxNone").addEventListener("click", () => { rxSel = new Set(); renderRegexBar(); scheduleSave(); });
+
+  function renderAll() { renderList(); renderEditor(); renderVars(); updateBadge(); renderRegexBar(); scheduleSave(); }
+})();
+</script>
+</body>
+</html>
