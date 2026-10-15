@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>프리셋 변환기</title>
+<title>프리셋 편집기</title>
 <link rel="stylesheet" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
 :root {
@@ -177,6 +177,9 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
 #regexListWrap { border-top: 1px solid var(--line); }
 #regexListWrap .toolbar { padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .chip.warn { background: var(--warn-soft); color: var(--warn); }
+.vtable { border-collapse: collapse; font-size: 13px; }
+.vtable td { padding: 3px 10px 3px 0; vertical-align: top; }
+.vtable td:first-child { word-break: break-all; }
 .rx-sum { color: var(--warn); white-space: nowrap; }
 .rx-patch { display: flex; gap: 5px; align-items: center; cursor: pointer; margin-left: 6px; }
 .rxlist { max-height: 320px; overflow: auto; user-select: none; color: var(--text); font-size: 14px; }
@@ -185,7 +188,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
 <body>
 <header class="top">
   <div class="top-inner">
-    <span class="brand">Converter</span>
+    <span class="brand">TO ME</span>
     <button id="openBtn">파일 열기</button>
     <input id="presetName" type="text" placeholder="프리셋 이름" class="hidden">
     <button id="resetBtn" class="ghost hidden" title="작업을 지우고 처음부터">새로 시작</button>
@@ -264,7 +267,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
 
 </main>
 
-<script id="stme-core">
+<script id="core">
 (function (root) {
   "use strict";
 
@@ -370,7 +373,6 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
     return { kind: "macro", flags, closing: flags.includes("/"), name, lname: name.toLowerCase(), args: args.map((a) => a.trim()), rest };
   }
 
-  // ── ST macro tables ──
   const RENAME = {
     user: "user", char: "char", group: "group", input: "input", model: "model",
     description: "description", chardescription: "description",
@@ -404,10 +406,9 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
   const VAR_GLOBAL = { getglobalvar: "getvar", setglobalvar: "setvar", addglobalvar: "addvar", incglobalvar: "incvar", decglobalvar: "decvar" };
   const HASVAR = new Set(["hasvar", "varexists", "hasglobalvar", "globalvarexists"]);
   const DELVAR = new Set(["deletevar", "flushvar", "deleteglobalvar", "flushglobalvar"]);
-  const ME_NATIVE_BLOCKS = new Set(["uppercase", "lowercase"]);
-  // ST macros whose {{name}}content{{/name}} form passes the content as the last argument.
+  const NATIVE_BLOCKS = new Set(["uppercase", "lowercase"]);
   const SCOPED_CONTENT = new Set([...VAR_SAME, ...Object.keys(VAR_GLOBAL), "random", "pick", "roll", "banned", "outlet", "reverse", "trim"]);
-  const ME_PASSTHROUGH = new Set(["random", "roll", "outlet", "trimstart", "trimend", "addnumvar", "datetime", "timezone",
+  const PASSTHROUGH = new Set(["random", "roll", "outlet", "trimstart", "trimend", "addnumvar", "datetime", "timezone",
     "include", "lorebooksize", "agent", "newline", "uppercase", "lowercase", "banned"]);
 
   const mac = (name, ...args) => "{{" + [name, ...args].join("::") + "}}";
@@ -423,8 +424,21 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
   }
 
   // ── converter (one instance per section so warnings know where they came from) ──
-  function makeConverter(report) {
+  function makeConverter(report, reservedText = "") {
     let where = "";
+    const renames = new Map();
+    let renameSeq = 0;
+    function varName(name) {
+      const n = name.trim();
+      if (!n || /^[\w.-]+$/.test(n) || n.includes("{{")) return n;
+      if (!renames.has(n)) {
+        let safe;
+        do safe = "cv_" + String(++renameSeq).padStart(3, "0"); while (reservedText.includes(safe));
+        renames.set(n, safe);
+      }
+      report.add("info", "영문이 아닌 변수 이름은 마리나라가 읽지 못하므로 영문 이름으로 바꿨습니다. 매크로 변환 탭의 대응표를 확인하세요.");
+      return renames.get(n);
+    }
 
     function convertText(text) {
       const tokens = lex(text);
@@ -470,7 +484,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
     function convertScoped(tokens, open, close, pairs) {
       const h = tokens[open].head;
       if (h.lname === "if") return convertIf(h, tokens, open + 1, close, pairs);
-      if (ME_NATIVE_BLOCKS.has(h.lname)) return "{{" + h.lname + "}}" + convertTokens(tokens, open + 1, close, pairs) + "{{/" + h.lname + "}}";
+      if (NATIVE_BLOCKS.has(h.lname)) return "{{" + h.lname + "}}" + convertTokens(tokens, open + 1, close, pairs) + "{{/" + h.lname + "}}";
       let content = convertTokens(tokens, open + 1, close, pairs);
       if (!SCOPED_CONTENT.has(h.lname)) return convertMacro(tokens[open], null) + content + tokens[close].raw;
       if (!h.flags.includes("#")) content = content.trim();
@@ -501,12 +515,12 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
       if (m) { if (m[1] === "$") globalWarn(); return { cond: "var:" + m[2], inverted }; }
       m = c.match(/^\{\{\s*([.$])([a-zA-Z](?:[\w-]*\w)?)\s*(==|!=|>=|<=|>|<)\s*([\s\S]*?)\s*\}\}$/);
       if (m) { if (m[1] === "$") globalWarn(); return { cond: "var:" + m[2] + " " + m[3] + " " + quote(convertText(m[4])), inverted }; }
-      m = c.match(/^\{\{\s*get(global)?var\s*::\s*([\w.-]+)\s*\}\}$/i);
-      if (m) { if (m[1]) globalWarn(); return { cond: "var:" + m[2], inverted }; }
+      m = c.match(/^\{\{\s*get(global)?var\s*::\s*([^:{}]+?)\s*\}\}$/i);
+      if (m) { if (m[1]) globalWarn(); return { cond: "var:" + varName(m[2]), inverted }; }
       if (/^[a-zA-Z_][\w-]*$/.test(c)) {
         const l = c.toLowerCase();
         if (RENAME[l] || APPROX_RENAME[l] || UNSUPPORTED.has(l)) return { cond: convertText("{{" + c + "}}"), inverted };
-        report.add("info", `조건 '${c}'은(는) 실리태번 매크로가 아니라서 글자 그대로("${c}") 비교하도록 바꿨습니다. 실리태번에서도 항상 참이었습니다.`, where);
+        report.add("info", `조건 '${c}'은(는) 실리태번 매크로가 아니라서 글자 그대로("${c}") 비교하도록 바꿨습니다.`, where);
         return { cond: quote(c), inverted };
       }
       if (c.includes("{{")) return { cond: convertText(c), inverted };
@@ -570,6 +584,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
         return "{{" + RENAME[l] + "}}";
       }
       if (APPROX_RENAME[l]) { report.add("approx", APPROX_RENAME[l][1], where); return "{{" + APPROX_RENAME[l][0] + "}}"; }
+      if ((VAR_SAME.has(l) || VAR_GLOBAL[l] || HASVAR.has(l) || DELVAR.has(l)) && args.length) args[0] = varName(args[0]);
       if (VAR_SAME.has(l)) return mac(l, ...args);
       if (VAR_GLOBAL[l]) { globalWarn(); return mac(VAR_GLOBAL[l], ...args); }
       if (HASVAR.has(l)) {
@@ -618,18 +633,19 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
         report.add("manual", `{{${h.name}}}은(는) 마리나라에 같은 기능이 없어서 원문 그대로 두었습니다.`, where);
         return tok.raw;
       }
-      if (ME_PASSTHROUGH.has(l)) return tok.raw;
+      if (PASSTHROUGH.has(l)) return tok.raw;
       return tok.raw; // unknown: custom/preset variable or plain text
     }
 
     return {
       convert(text, label) { where = label || ""; return convertText(text || ""); },
+      renames,
     };
   }
 
   // ── preset structure ──
   const MARKER_DISPLAY_NAMES = { character: "Character Info", world_info_before: "World Info (before)", world_info_after: "World Info (after)", persona: "Persona", chat_history: "Chat History", dialogue_examples: "Chat Examples" };
-  function mapSTMarkerConfig(identifier, legacy) {
+  function mapMarkerConfig(identifier, legacy) {
     if (legacy && (identifier === "worldInfoBefore" || identifier === "worldInfoAfter")) return { type: "lorebook" };
     switch (identifier) {
       case "chatHistory": return { type: "chat_history" };
@@ -645,18 +661,17 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
   function guessPresetName(raw, fileName) {
     if (typeof raw.name === "string" && raw.name.trim()) return raw.name.trim();
     if (fileName) return fileName.replace(/\.json$/i, "");
-    return "SillyTavern Preset";
+    return "Preset";
   }
 
-  function parseST(raw, fileName, opts = {}) {
+  function parsePreset(raw, fileName, opts = {}) {
     if (!raw || !Array.isArray(raw.prompts)) throw new Error("실리태번 프롬프트 프리셋이 아닙니다 (prompts 목록이 없습니다).");
     const report = makeReport();
-    const conv = makeConverter(report);
+    const conv = makeConverter(report, JSON.stringify(raw));
     const orderDef = (raw.prompt_order || []).find((o) => o.character_id === 100001) || (raw.prompt_order || [])[0];
     const orderMap = new Map(((orderDef && orderDef.order) || []).map((o, i) => [o.identifier, { index: i, enabled: o.enabled }]));
     const chatHistoryIndex = orderMap.has("chatHistory") ? orderMap.get("chatHistory").index : Number.MAX_SAFE_INTEGER;
     const idx = (p) => (orderMap.has(p.identifier) ? orderMap.get(p.identifier).index : Number.MAX_SAFE_INTEGER);
-    // ST never sends prompts that dropped out of prompt_order; they are leftovers, so they are not converted.
     const used = orderMap.size && !opts.legacy ? raw.prompts.filter((p) => orderMap.has(p.identifier)) : raw.prompts;
     const orphanCount = raw.prompts.length - used.length;
     const sorted = [...used].sort((a, b) => idx(a) - idx(b));
@@ -682,7 +697,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
       const name = entry.name || "";
       // Empty bracket entries are visual dividers; markers named with a bracket (e.g. "└ World Info") are real.
       if ((opts.legacy || !entry.marker) && /^[┌└┎┖⌈⌊⌜⌞]/.test(name) && !(entry.content || "").trim()) continue;
-      const marker = entry.marker ? mapSTMarkerConfig(entry.identifier, opts.legacy) : null;
+      const marker = entry.marker ? mapMarkerConfig(entry.identifier, opts.legacy) : null;
       if (marker) { if (emitted.has(marker.type)) continue; emitted.add(marker.type); }
       let role = "system";
       if (entry.role === "user") role = "user";
@@ -712,11 +727,11 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
     const regexScripts = convertRegexScripts(raw, conv, report);
     const regexSafety = regexScripts.map((s) => checkRegexSafety(s.findRegex, report, "정규식: " + s.scriptName));
     if (orphanCount) report.add("info", `프롬프트 목록에서 빠져 있어 실리태번이 보내지 않던 프롬프트 ${orphanCount}개는 변환하지 않았습니다.`);
-    return { name: guessPresetName(raw, fileName), sections, groups, regexScripts, regexSafety, orphanCount, report, converter: conv };
+    return { name: guessPresetName(raw, fileName), sections, groups, regexScripts, regexSafety, orphanCount, varRenames: [...conv.renames], report, converter: conv };
   }
 
   // ── preset-bound regex scripts ──
-  const ST_REGEX_PLACEMENTS = { 3: "슬래시 명령", 5: "월드 인포", 6: "추론(Reasoning)" };
+  const LOST_PLACEMENTS = { 3: "슬래시 명령", 5: "월드 인포", 6: "추론(Reasoning)" };
   function convertRegexScripts(raw, conv, report) {
     const scripts = raw.extensions && Array.isArray(raw.extensions.regex_scripts) ? raw.extensions.regex_scripts : [];
     return scripts.filter((s) => s && typeof s === "object").map((s, i) => {
@@ -729,7 +744,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
         if (s.substituteRegex) out.findRegex = conv.convert(s.findRegex, where);
         else report.add("manual", "찾을 패턴에 {{ }}가 있는 정규식입니다. 실리태번은 이것을 글자 그대로 찾았지만, 마리나라는 매크로로 풀어서 찾습니다. 의도대로 동작하는지 확인해야 합니다.", where);
       }
-      const lost = (Array.isArray(s.placement) ? s.placement : []).map((p) => ST_REGEX_PLACEMENTS[p]).filter(Boolean);
+      const lost = (Array.isArray(s.placement) ? s.placement : []).map((p) => LOST_PLACEMENTS[p]).filter(Boolean);
       if (lost.length) report.add("approx", `정규식의 적용 위치 중 ${lost.join(", ")}은(는) 마리나라에 없어서 빠집니다.`, where);
       return out;
     });
@@ -1120,7 +1135,6 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
       const multi = !isBool && (v.pick === "multi" || v.pick === "random");
       const random = !isBool && v.pick === "random";
       const addNone = !isBool && v.pick === "single" && v.addNone;
-      // Default selection: explicit ids from the editor, else whatever was enabled in ST.
       const customDefaults = Array.isArray(v.defaultIds);
       const enabledIdx = picked
         .map((s, i) => ((customDefaults ? v.defaultIds.includes(s.id) : s.enabled) ? i : -1))
@@ -1169,7 +1183,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
       if (v.mode === "A") {
         const first = picked[0];
         const merged = {
-          ...first, id: newId(), identifier: "stme_" + v.varName, name: (v.sectionName || "").trim() || v.varName,
+          ...first, id: newId(), identifier: "var_" + v.varName, name: (v.sectionName || "").trim() || v.varName,
           originalContent: "", content: "{{" + v.varName + "}}", enabled: true, isMarker: false, markerConfig: null,
         };
         sections = sections.map((s) => (s.id === first.id ? merged : s));
@@ -1203,7 +1217,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
       exportedAt: now,
       data: {
         preset: {
-          id: presetId, name: opts.name || parsed.name, description: "Converted from SillyTavern",
+          id: presetId, name: opts.name || parsed.name, description: "",
           conversationPrompt: "", gamePrompt: "",
           sectionOrder: outSections.map((s) => s.id), groupOrder: outGroups.map((g) => g.id),
           variableGroups: [], variableValues: {}, wrapFormat: "none", defaultChoices, author: "",
@@ -1246,7 +1260,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
     return { prefix: prefix.replace(/[\]】)）]$/u, "").trim() || prefix, rest };
   }
 
-  root.STME = { lex, parseHead, makeConverter, makeReport, parseST, buildPreset, validateVariable, splitCommonPrefix, isPatternSafe, newId };
+  root.Converter = { lex, parseHead, makeConverter, makeReport, parsePreset, buildPreset, validateVariable, splitCommonPrefix, isPatternSafe, newId };
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>
@@ -1290,14 +1304,14 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
   }
   file.addEventListener("change", () => { if (file.files[0]) load(file.files[0]); file.value = ""; });
 
-  let source = null; // { text, name } of the loaded ST file, kept for autosave
+  let source = null;
 
   async function load(f) {
     const err = $("loadError");
     err.classList.add("hidden");
     try {
       const text = await f.text();
-      const next = STME.parseST(JSON.parse(text), f.name);
+      const next = Converter.parsePreset(JSON.parse(text), f.name);
       if (variables.length && !confirm("다른 파일을 열면 지금 만든 변수가 사라집니다. 계속할까요?")) return;
       source = { text, name: f.name };
       parsed = next;
@@ -1323,7 +1337,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
 
   // ── autosave (IndexedDB: presets can be bigger than localStorage allows) ──
   // Section ids are regenerated on every parse, so saved state refers to sections by list position.
-  const DB_NAME = "stme-converter", STORE = "state", KEY = "current";
+  const DB_NAME = "preset-converter", STORE = "state", KEY = "current";
   function idb(mode, fn) {
     return new Promise((resolve, reject) => {
       const open = indexedDB.open(DB_NAME, 1);
@@ -1352,13 +1366,13 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
   }
   function restore(s) {
     const raw = JSON.parse(s.source.text);
-    parsed = STME.parseST(raw, s.source.name);
+    parsed = Converter.parsePreset(raw, s.source.name);
     source = s.source;
     let id = (i) => parsed.sections[i] && parsed.sections[i].id;
     if (s.v === 1) {
       // Saved by the previous version: its indices point into the old section list, so map them by identifier.
       // Sections that no longer exist (dropped leftovers) simply fall away.
-      const old = STME.parseST(raw, s.source.name, { legacy: true });
+      const old = Converter.parsePreset(raw, s.source.name, { legacy: true });
       const byIdent = new Map();
       parsed.sections.forEach((x) => { if (!byIdent.has(x.identifier)) byIdent.set(x.identifier, x.id); });
       id = (i) => old.sections[i] && byIdent.get(old.sections[i].identifier);
@@ -1543,12 +1557,12 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
   function openList() {
     if (!narrow.matches || listOpen()) return;
     document.body.classList.add("list-open");
-    history.pushState({ stmeList: 1 }, ""); // so the phone's back button closes the sheet
+    history.pushState({ sheetList: 1 }, ""); // so the phone's back button closes the sheet
   }
   function hideList() { document.body.classList.remove("list-open"); }
   function closeList() {
     if (!listOpen()) return;
-    if (history.state && history.state.stmeList) history.back(); else hideList();
+    if (history.state && history.state.sheetList) history.back(); else hideList();
   }
   addEventListener("popstate", hideList);
   $("listFab").addEventListener("click", openList);
@@ -1589,7 +1603,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
     }
     // Auto-fill names from the shared prefix of the picked toggle names, without overwriting user edits.
     const names = ed.order.map((id) => map.get(id).name || "");
-    const { prefix, rest } = STME.splitCommonPrefix(names);
+    const { prefix, rest } = Converter.splitCommonPrefix(names);
     const fallback = ed.order.length === 1 ? names[0] : "";
     if (!ed.touched.question) ed.question = prefix || fallback;
     if (!ed.touched.sectionName) ed.sectionName = prefix || fallback;
@@ -1652,7 +1666,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
   }
 
   // Shared variable-name prefix (e.g. "a_"): remembered per browser, applied to every new variable.
-  const PREFIX_KEY = "stme-var-prefix";
+  const PREFIX_KEY = "var-prefix";
   let varPrefix = "";
   try { varPrefix = localStorage.getItem(PREFIX_KEY) || ""; } catch {}
   function fullVarName() {
@@ -1700,7 +1714,6 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
     if (b.dataset.seg) {
       const prevPick = ed.pick;
       ed[b.dataset.seg] = b.dataset.val;
-      // Leaving "하나만": pre-check every toggle that was on in ST.
       if (b.dataset.seg === "pick" && prevPick === "single" && b.dataset.val !== "single") {
         const map = byId();
         ed.defaults = new Set(ed.order.filter((id) => map.get(id).enabled));
@@ -1735,7 +1748,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
       _ed: { touched: { question: ed.touched.question, sectionName: ed.touched.sectionName }, labels: { ...ed.labels }, noneDefault: ed.noneDefault },
     };
     const others = variables.filter((_, i) => i !== editing);
-    const error = STME.validateVariable(spec, parsed, others);
+    const error = Converter.validateVariable(spec, parsed, others);
     if (error) { ed.error = error; return renderEditor(); }
     if (editing !== null) variables[editing] = spec; else variables.push(spec);
     resetEditor();
@@ -1792,7 +1805,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
 
   // ── macro tab ──
   function build() {
-    return STME.buildPreset(parsed, variables, { name: $("presetName").value.trim(), excludeIds: [...removed] });
+    return Converter.buildPreset(parsed, variables, { name: $("presetName").value.trim(), excludeIds: [...removed] });
   }
   function updateBadge() {
     const list = build().report;
@@ -1821,6 +1834,9 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
         <div class="stat"><b>${out.envelope.data.groups.length}</b><span>그룹</span></div>
       </div>
       ${warnings || `<div class="wbox"><h3>확인할 것이 없습니다</h3></div>`}
+      ${parsed.varRenames.length ? `<div class="wbox"><h3>변수 이름 대응표 (${parsed.varRenames.length}개)</h3>
+        <p class="hint" style="margin:8px 14px 0">마리나라는 변수 이름에 영문·숫자·_ . -만 쓸 수 있어서 아래처럼 바꿨습니다. 로어북이나 캐릭터 카드에서 같은 변수를 쓴다면 거기서도 바꿔야 합니다.</p>
+        <div class="rxlist" style="padding:6px 14px 10px"><table class="vtable">${parsed.varRenames.map(([from, to]) => `<tr><td>${esc(from)}</td><td>→</td><td><code>${esc(to)}</code></td></tr>`).join("")}</table></div></div>` : ""}
       <div class="toolbar" style="margin:14px 0 8px"><b>섹션 미리보기</b>
         <label class="hint" style="margin-left:auto;display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" id="onlyChanged" ${onlyChanged ? "checked" : ""}> 바뀐 섹션만</label></div>
       ${shown.map((s) => {
