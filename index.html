@@ -200,7 +200,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
 
 <main>
   <div id="drop" class="drop">
-    <b>실리태번 프리셋 JSON을 끌어다 놓으십시오</b>
+    <b>프리셋 JSON을 끌어다 놓으세요</b>
     <span>또는 눌러서 파일 고르기 · 파일은 이 브라우저 안에서만 처리됩니다</span>
     <div id="loadError" class="err hidden"></div>
   </div>
@@ -1077,7 +1077,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
     if (spec.varName.length === 21) return "길이가 정확히 21자인 이름은 마리나라가 캐릭터 ID로 써서 쓸 수 없습니다.";
     if (RESERVED_NAMES.has(spec.varName.toLowerCase())) return `'${spec.varName}'은(는) 마리나라 기본 매크로 이름이라 쓸 수 없습니다.`;
     if (existing.some((v) => v.varName.toLowerCase() === spec.varName.toLowerCase())) return "같은 이름의 변수가 이미 있습니다.";
-    if (!spec.sectionIds.length) return "토글을 하나 이상 고르십시오.";
+    if (!spec.sectionIds.length) return "토글을 하나 이상 고르세요.";
     const used = new Set(existing.flatMap((v) => v.sectionIds));
     if (spec.sectionIds.some((id) => used.has(id))) return "이미 다른 변수에 묶인 토글이 있습니다.";
     const byId = new Map(parsed.sections.map((s) => [s.id, s]));
@@ -1139,12 +1139,12 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
       else values = labels.slice();
 
       if (v.mode === "A" && new Set(values).size !== values.length) {
-        report.add("manual", `'${v.varName}': 내용이 똑같은 토글이 있어서 선택이 헷갈릴 수 있습니다. B 방식을 쓰거나 내용을 다르게 하십시오.`, v.varName);
+        report.add("manual", `'${v.varName}': 내용이 똑같은 토글이 있어서 선택이 헷갈릴 수 있습니다. B 방식을 쓰거나 내용을 다르게 하세요.`, v.varName);
       }
       if (v.mode === "A") {
         const sig = (s) => [s.role, s.injectionPosition, s.injectionDepth, s.groupId].join("|");
         if (new Set(picked.map(sig)).size > 1) {
-          report.add("manual", `'${v.varName}': 고른 토글들의 역할·위치·깊이·그룹이 서로 다릅니다. A 방식은 첫 번째 토글 자리에 모두 모으므로, 원래 위치가 중요하면 B 방식을 쓰십시오.`, v.varName);
+          report.add("manual", `'${v.varName}': 고른 토글들의 역할·위치·깊이·그룹이 서로 다릅니다. A 방식은 첫 번째 토글 자리에 모두 모으므로, 원래 위치가 중요하면 B 방식을 쓰세요.`, v.varName);
         }
       }
 
@@ -1599,7 +1599,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
   function renderEditor() {
     const box = $("editor");
     if (!ed.order.length) {
-      box.innerHTML = `<div class="empty">${editing !== null ? `옵션으로 쓸 토글을 <span class="only-wide">왼쪽에서</span><span class="only-narrow">아래 버튼으로</span> 고르십시오` : `<span class="only-wide">왼쪽에서</span><span class="only-narrow">아래 '원본 토글 고르기'에서</span> 묶을 토글을 고르면<br>여기서 프리셋 변수로 만들 수 있습니다`}</div>`;
+      box.innerHTML = `<div class="empty">${editing !== null ? `옵션으로 쓸 토글을 <span class="only-wide">왼쪽에서</span><span class="only-narrow">아래 버튼으로</span> 고르세요` : `<span class="only-wide">왼쪽에서</span><span class="only-narrow">아래 '원본 토글 고르기'에서</span> 묶을 토글을 고르면<br>여기서 프리셋 변수로 만들 수 있습니다`}</div>`;
       if (editing !== null) box.innerHTML += `<div class="ed-foot" style="padding:0 14px 14px"><button data-act="cancel">편집 취소</button></div>`;
       return;
     }
@@ -1633,7 +1633,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--code-bg);
         <div class="fld"><span>변수 이름 (영문·숫자·_)</span>
           <div class="affix"><input type="text" data-prefix value="${esc(varPrefix)}" placeholder="앞부분" aria-label="공통 앞부분" title="모든 변수 이름 앞에 붙는 공통 앞부분 (예: a_). 다음에도 기억됩니다"><input type="text" data-field="varName" value="${esc(ed.varName)}" placeholder="style"></div>
           <div class="hint" data-final>${finalNameHint()}</div></div>
-        <label class="fld"><span>질문 (선택 창에 보임)</span><input type="text" data-field="question" value="${esc(ed.question)}" placeholder="문체를 고르십시오"></label>
+        <label class="fld"><span>질문 (선택 창에 보임)</span><input type="text" data-field="question" value="${esc(ed.question)}" placeholder="문체를 고르세요"></label>
       </div>
       ${ed.mode === "A" ? `<label class="fld"><span>새 섹션 이름 (프리셋 목록에 보일 이름)</span><input type="text" data-field="sectionName" value="${esc(ed.sectionName)}" placeholder="비우면 변수 이름"></label>` : ""}
       ${isBool ? `<div class="hint">토글 하나라서 켜기/끄기 스위치가 됩니다.</div>` : `<div class="fld"><span>선택 방식</span>${seg("pick", [["single", "하나만"], ["multi", "여러 개"], ["random", "랜덤 1개", "고른 것 중 하나를 매번 랜덤으로"]])}</div>`}
