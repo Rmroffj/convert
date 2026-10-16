@@ -5911,7 +5911,18 @@
                     while (taken.has(full(name))) name = base + ++k;
                     return name;
                 }
+                // 다시 그리는 중에 포커스된 입력칸이 지워지면 focusout이 다시 렌더를 부르지 않도록 막음
+                var edRendering = false;
                 function renderEditor() {
+                    if (edRendering) return;
+                    edRendering = true;
+                    try {
+                        return renderEditorInner();
+                    } finally {
+                        edRendering = false;
+                    }
+                }
+                function renderEditorInner() {
                     if (vvEdit) return renderValueForm();
                     const box = $("editor");
                     if (!ed.order.length) {
@@ -6077,7 +6088,7 @@
                     }
                 });
                 $("editor").addEventListener("focusout", (e) => {
-                    if (e.target.dataset.into !== undefined && e.target.isConnected) setInto(e.target);
+                    if (e.target.dataset.into !== undefined && e.target.isConnected && !edRendering) setInto(e.target);
                 });
                 $("editor").addEventListener("mousedown", (e) => {
                     const it = e.target.closest(".combo-item");
