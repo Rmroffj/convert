@@ -332,7 +332,7 @@
             .adv-t .hint {
                 font-size: 12px;
             }
-            .adv {
+            .placement-options {
                 display: flex;
                 flex-direction: column;
                 gap: 12px;
@@ -5974,7 +5974,7 @@
       <button class="adv-t" data-act="adv" aria-expanded="${advOpen}">넣는 방식 · 위치${cond ? " · 조건" : ""} <span class="hint">${esc(advSummary)}</span></button>
       ${
           advOpen ?
-              `<div class="adv">
+              `<div class="placement-options">
         <div class="modes">
           <button data-seg="mode" data-val="A" class="${ed.mode === "A" ? "on" : ""}">내용 옮기기<span>옵션 글을 변수 하나에 모아 한 섹션에 넣습니다. 보통 이쪽입니다.</span></button>
           <button data-seg="mode" data-val="B" class="${ed.mode === "B" ? "on" : ""}">#if로 감싸기<span>원래 섹션은 그대로 두고 각각 조건문으로 감쌉니다.</span></button>
